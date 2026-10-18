@@ -93,4 +93,9 @@ test('mass kill asks first, then ends the round after the turn', async ({ page }
   await expect.poll(async () => (await state(page)).massKill).toBe(true);
   await page.keyboard.press('Space');
   await expect.poll(async () => (await state(page)).phase, { timeout: 15_000 }).toBe('roundOver');
+
+  // A click on the "wins" banner continues, just like a key.
+  await page.waitForTimeout(700);
+  await clickLogical(page, 320, 300);
+  await expect.poll(() => page.evaluate(() => window.__tankwars?.scene)).toBe('status');
 });

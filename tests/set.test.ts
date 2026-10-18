@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AI_IDS } from '../src/ai/registry';
+import { AI_IDS, AI_NAMES } from '../src/ai/registry';
 import { GameSet, roundScore, SCORE_FOR_WIN, SCORE_PER_KILL } from '../src/game/set';
 import { DEFAULT_SETTINGS, defaultSlots, type Settings } from '../src/game/settings';
 import { itemIndex, LEAD_BALL } from '../src/sim/items';
@@ -47,6 +47,17 @@ describe('GameSet', () => {
       expect(p.ai).not.toBe('random');
       expect(AI_IDS).toContain(p.ai);
     }
+  });
+
+  it('names a "Random" computer after the personality it turned out to be', () => {
+    const slots = defaultSlots();
+    slots[1] = { name: 'Random', kind: 'computer', ai: 'random' };
+    slots[2] = { name: 'Bob', kind: 'computer', ai: 'random' };
+    const set = new GameSet(settings({ players: 3 }), slots, 11);
+    const [, random, bob] = set.players;
+    expect(random!.name).toBe(AI_NAMES[random!.ai!]);
+    expect(random!.name).not.toBe('Random');
+    expect(bob!.name).toBe('Bob');
   });
 
   it('starts everyone with the per-set inventory', () => {

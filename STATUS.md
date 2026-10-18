@@ -44,6 +44,8 @@ Stage 8 is done: the six original computer opponents (plus one new one) play as 
 - `?play&cpu=N&ai=<id>` chooses the computers' personality (default random).
 - Tests: 152 unit tests (new: probe accuracy and purity; Windless hits in calm air and ignores wind; Rifleman's direct aim; Lobber ranges at 75° then homes in; Twanger banks; Lob & Shoot switches; every AI makes legal plans; weapon safety; laser pricing; shopping never overspends and has priorities; tournament runs and ranks Windless over Stupid) + 13 e2e tests; all pass. I watched mixed and all-computer sets play to Final Results headlessly.
 
+**Fixes from review (2026-10-18):** a click now continues from the "X wins" banner, like a key (the pointer sends a raw `click` event for every press, mirroring keys). A computer left as "Random" is now named after the personality it was assigned at set start (custom names are kept).
+
 **Tournament (20 games per pairing, standard wind, random walls, seed 1), duel win rates:** Birdy Bonker 95%, Windless Wit 48%, Lob & Shoot 48%, Lobber 46%, Twanger 40%, Rifleman 22%, Mr. Stupid 10%. With walls off: Lob & Shoot 62%, Lobber 54%, Windless 43%, Twanger/Rifleman 18%. With walls on: Twanger 55% (best of the originals), Windless 50%, Lobber 29%, Rifleman 27%, Lob & Shoot 24%. Windless Wit: 100% with no wind, 50% in high wind. This matches the manual's threat descriptions.
 
 ## Implementation notes

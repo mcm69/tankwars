@@ -12,12 +12,14 @@ export type UiAction =
 
 /**
  * Everything input devices report to the scene each tick. `key` is sent for every fresh key
- * press (used to answer/dismiss overlays); `overlayClick` for clicks while an overlay is open.
+ * press and `click` for every pointer press (both mean "any key", e.g. to continue);
+ * `overlayClick` replaces `click` while an overlay is open.
  */
 export type InputEvent =
   | { kind: 'command'; cmd: Command }
   | { kind: 'ui'; action: UiAction }
   | { kind: 'key'; code: string }
+  | { kind: 'click'; x: number; y: number }
   | { kind: 'overlayClick'; x: number; y: number };
 
 /** Ticks a key or button must be held before it auto-repeats. */

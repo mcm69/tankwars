@@ -1,4 +1,4 @@
-import { resolveAi, type ConcreteAi } from '../ai/registry';
+import { AI_NAMES, resolveAi, type ConcreteAi } from '../ai/registry';
 import { Rng } from '../core/rng';
 import { aiShoppingList } from '../ai/buy';
 import { purchase, roundIncome } from './economy';
@@ -20,6 +20,16 @@ export interface SetPlayer {
   money: number;
   wins: number;
   kills: number;
+}
+
+/**
+ * A computer still named "Random" (the default for that choice) takes the name of the
+ * personality it turned out to be, like the original. Custom names are kept.
+ */
+function playerName(slot: PlayerSlot, index: number, ai: ConcreteAi | null): string {
+  const name = slot.name.trim();
+  if (ai && (name === '' || name === AI_NAMES.random)) return AI_NAMES[ai];
+  return name || `Player ${index + 1}`;
 }
 
 /** Points per round (provisional; Stage 7 settles scoring and money). */
@@ -60,18 +70,21 @@ export class GameSet {
     this.seed = seed >>> 0;
     const aiRng = new Rng(this.seed ^ 0xa1a1);
     const inventory = startInventory ?? startingInventory(settings.gamesPerSet);
-    this.players = slots.slice(0, settings.players).map((slot, index) => ({
-      index,
-      name: slot.name.trim() || `Player ${index + 1}`,
-      color: index,
-      kind: slot.kind,
-      ai: slot.kind === 'computer' ? resolveAi(slot.ai, aiRng) : null,
-      inventory: [...inventory],
-      score: 0,
-      money: startMoney,
-      wins: 0,
-      kills: 0,
-    }));
+    this.players = slots.slice(0, settings.players).map((slot, index) => {
+      const ai = slot.kind === 'computer' ? resolveAi(slot.ai, aiRng) : null;
+      return {
+        index,
+        name: playerName(slot, index, ai),
+        color: index,
+        kind: slot.kind,
+        ai,
+        inventory: [...inventory],
+        score: 0,
+        money: startMoney,
+        wins: 0,
+        kills: 0,
+      };
+    });
   }
 
   get totalRounds(): number {

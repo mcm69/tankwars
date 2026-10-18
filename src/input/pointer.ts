@@ -86,6 +86,7 @@ export class PointerController {
       this.queue.push({ kind: 'overlayClick', x, y });
       return;
     }
+    this.queue.push({ kind: 'click', x, y });
     const id = hudHitTest(x, y);
     if (id) {
       this.press = { kind: 'hud', id, ticks: 0, button: e.button };
