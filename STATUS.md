@@ -64,14 +64,6 @@ Stage 3 is done: every environmental option works and can be toggled from a dev 
 4. Crumble: `?crumble=100`, then shoot into a cliff face. The overhang collapses with animation, and tanks on it ride down and take fall damage. `?crumble=0` leaves overhangs floating.
 5. `?fall=0`: tanks hover over craters. `?visible=0`: the shell and tracking markers are hidden (the trail still draws unless `trail=0`).
 
-## Previous stage playtest (Stage 2)
-
-1. `npm run dev`, then open http://localhost:5173 (try `?players=4` and `?seed=7`).
-2. Watch the tanks drop in. The HUD shows whose turn it is, and a bobbing marker sits above that tank.
-3. Use ←/→ to aim (tap = 1°, hold = fast), ↑/↓ for power, PgUp/PgDn for ±100, `I` to flip, and Space to fire. Hold Shift for single steps.
-4. Shells arc under gravity and drift with the wind (shown in the HUD), carve craters and show damage numbers. Tanks over craters drop to the new ground.
-5. Kill everyone else, or yourself (power 0, straight up), to end the round, then press Space or Enter for a new one.
-
 ## Known issues
 
 - The plateaus style can still leave an occasional 3–4 px wide spike (tank pads are flattened, so tanks are unaffected).
