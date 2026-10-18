@@ -1,4 +1,4 @@
-import { GRAVITY, MAX_FLIGHT_TICKS, POWER_TO_SPEED, WIND_ACCEL } from './constants';
+import { GRAVITY, MAX_FLIGHT_TICKS, MAX_SPEED, POWER_TO_SPEED, WIND_ACCEL } from './constants';
 import { barrelTip, hitsTank, type Tank } from './tank';
 import type { Terrain } from './terrain';
 
@@ -24,6 +24,7 @@ export interface PhysicsWorld {
   terrain: Terrain;
   tanks: readonly Tank[];
   wind: number;
+  walls: boolean;
 }
 
 export function launch(tank: Tank): Projectile {
@@ -45,21 +46,39 @@ export function launch(tank: Tank): Projectile {
 /**
  * Advances a projectile by one tick (semi-implicit Euler), sweeping the path in sub-steps of
  * at most 1 px so fast shots can't tunnel through thin ground or tanks.
+ *
+ * Walls on: the shot reflects off the sides and ceiling (the floor is ground).
+ * Walls off: it may leave the field and come back, but is dropped as soon as it is off a side,
+ * moving away, with no wind to bring it back.
  */
 export function stepProjectile(p: Projectile, world: PhysicsWorld): StepResult {
-  const { terrain, tanks, wind } = world;
+  const { terrain, tanks, wind, walls } = world;
+  const w = terrain.width;
+  const windAccel = wind * WIND_ACCEL;
   p.prevX = p.x;
   p.prevY = p.y;
   p.age++;
-  p.vx += wind * WIND_ACCEL;
-  p.vy += GRAVITY;
+  p.vx = clampSpeed(p.vx + windAccel);
+  p.vy = clampSpeed(p.vy + GRAVITY);
 
   const steps = Math.max(1, Math.ceil(Math.hypot(p.vx, p.vy)));
-  const sx = p.vx / steps;
-  const sy = p.vy / steps;
+  let sx = p.vx / steps;
+  let sy = p.vy / steps;
   for (let i = 0; i < steps; i++) {
     p.x += sx;
     p.y += sy;
+    if (walls) {
+      if (p.x < 0 || p.x >= w) {
+        p.x = p.x < 0 ? -p.x : 2 * (w - 1e-6) - p.x;
+        sx = -sx;
+        p.vx = -p.vx;
+      }
+      if (p.y < 0) {
+        p.y = -p.y;
+        sy = -sy;
+        p.vy = -p.vy;
+      }
+    }
     for (const t of tanks) {
       if (hitsTank(t, p.x, p.y)) return { kind: 'hitTank', x: p.x, y: p.y, tankId: t.id };
     }
@@ -67,8 +86,15 @@ export function stepProjectile(p: Projectile, world: PhysicsWorld): StepResult {
     if (terrain.isSolid(p.x, p.y)) return { kind: 'hitTerrain', x: p.x, y: p.y };
   }
 
-  // Off the sides: keep flying while it could still come back (Stage 3 adds wall rules).
-  const w = terrain.width;
-  if (p.x < -w || p.x > 2 * w || p.age > MAX_FLIGHT_TICKS) return { kind: 'lost' };
+  if (p.age > MAX_FLIGHT_TICKS) return { kind: 'lost' };
+  if (!walls) {
+    const goneLeft = p.x < 0 && p.vx <= 0 && windAccel <= 0;
+    const goneRight = p.x >= w && p.vx >= 0 && windAccel >= 0;
+    if (goneLeft || goneRight || p.x < -2 * w || p.x > 3 * w) return { kind: 'lost' };
+  }
   return { kind: 'flying' };
+}
+
+function clampSpeed(v: number): number {
+  return Math.max(-MAX_SPEED, Math.min(MAX_SPEED, v));
 }

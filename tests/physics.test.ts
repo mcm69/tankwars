@@ -7,7 +7,7 @@ import { Material, Terrain } from '../src/sim/terrain';
 
 /** Flies a shot through empty space and returns x where it falls back to its launch height. */
 function rangeOf(angle: number, power: number, wind: number): number {
-  const world: PhysicsWorld = { terrain: new Terrain(4000, 4000), tanks: [], wind };
+  const world: PhysicsWorld = { terrain: new Terrain(4000, 4000), tanks: [], wind, walls: false };
   const tank = createTank(0, 'a', 0, 2000, 3000);
   tank.angle = angle;
   tank.power = power;
@@ -45,8 +45,9 @@ describe('projectile physics', () => {
     tank.angle = 5;
     tank.power = 1000;
     const p = launch(tank);
-    let r = stepProjectile(p, { terrain, tanks: [tank], wind: 0 });
-    while (r.kind === 'flying') r = stepProjectile(p, { terrain, tanks: [tank], wind: 0 });
+    let r = stepProjectile(p, { terrain, tanks: [tank], wind: 0, walls: false });
+    while (r.kind === 'flying')
+      r = stepProjectile(p, { terrain, tanks: [tank], wind: 0, walls: false });
     expect(r.kind).toBe('hitTerrain');
     if (r.kind === 'hitTerrain') expect(Math.floor(r.x)).toBe(200);
   });
@@ -58,7 +59,7 @@ describe('projectile physics', () => {
     shooter.angle = 0;
     shooter.power = 1000;
     const p = launch(shooter);
-    const world = { terrain, tanks: [shooter, target], wind: 0 };
+    const world = { terrain, tanks: [shooter, target], wind: 0, walls: false };
     let r = stepProjectile(p, world);
     while (r.kind === 'flying') r = stepProjectile(p, world);
     expect(r).toMatchObject({ kind: 'hitTank', tankId: 1 });
@@ -70,8 +71,9 @@ describe('projectile physics', () => {
     tank.angle = 30;
     tank.power = 1000;
     const p = launch(tank);
-    let r = stepProjectile(p, { terrain, tanks: [], wind: 0 });
-    while (r.kind === 'flying') r = stepProjectile(p, { terrain, tanks: [], wind: 0 });
+    let r = stepProjectile(p, { terrain, tanks: [], wind: 0, walls: false });
+    while (r.kind === 'flying')
+      r = stepProjectile(p, { terrain, tanks: [], wind: 0, walls: false });
     expect(r.kind).toBe('lost');
   });
 });

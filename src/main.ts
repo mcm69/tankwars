@@ -5,6 +5,7 @@ import { DebugOverlay } from './render/debug-overlay';
 import { Screen } from './render/screen';
 import { BattleScene } from './scenes/battle';
 import { TerrainLab } from './scenes/terrain-lab';
+import { optionsFromParams } from './ui/options-params';
 import type { Phase, Round } from './sim/round';
 
 declare global {
@@ -28,14 +29,17 @@ const playerCount = Math.min(10, Math.max(2, Number(params.get('players')) || 2)
 
 const screen = new Screen(app, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 const debug = new DebugOverlay(app);
-// ?lab opens the terrain lab; otherwise a hot-seat battle (?players=N, ?seed=N).
+// ?lab opens the terrain lab; otherwise a hot-seat battle (?players=N, ?seed=N, plus game
+// options such as ?wind=none&walls=on&crumble=100&fall=0&visible=0&trail=0).
 const battle = params.has('lab')
   ? null
   : new BattleScene(
+      app,
       screen,
       debug,
       seed,
       Array.from({ length: playerCount }, (_, i) => ({ name: `Player ${i + 1}`, color: i })),
+      optionsFromParams(params),
     );
 const scene = battle ?? new TerrainLab(screen, debug, seed);
 

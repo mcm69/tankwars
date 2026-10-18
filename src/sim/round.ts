@@ -1,6 +1,23 @@
 import { Rng } from '../core/rng';
-import { EXPLOSION_TICKS, FIELD_HEIGHT, FIELD_WIDTH, TANK_FALL_SPEED } from './constants';
+import {
+  CRUMBLE_MAX_PASSES,
+  EXPLOSION_TICKS,
+  FALL_DAMAGE_PER_PIXEL,
+  FALL_DAMAGE_THRESHOLD,
+  FIELD_HEIGHT,
+  FIELD_WIDTH,
+  TANK_FALL_SPEED,
+} from './constants';
+import { Crumbler, hasLooseDirt } from './crumble';
 import { blastDamage, type Blast } from './damage';
+import {
+  DEFAULT_OPTIONS,
+  resolveWalls,
+  resolveWindLevel,
+  rollWind,
+  type GameOptions,
+  type WindLevel,
+} from './options';
 import { launch, stepProjectile, type Projectile } from './physics';
 import { createTank, isSupported, maxPower, tankCenter, type Tank } from './tank';
 import { Material, type Terrain } from './terrain';
@@ -15,8 +32,11 @@ export interface RoundConfig {
   seed: number;
   players: readonly PlayerSetup[];
   terrainStyle?: TerrainStyle;
-  /** Fixed wind; random when omitted. */
+  options?: Partial<GameOptions>;
+  /** Fixed wind, overriding the wind level (tests). */
   wind?: number;
+  /** Fixed wall behavior, overriding the wall mode (tests). */
+  walls?: boolean;
 }
 
 /** The only weapon until Stage 5: roughly an Incinerator. */
@@ -24,7 +44,8 @@ export const SHELL = { radius: 20, damage: 150 } as const;
 /** A dying tank's final explosion, which can catch neighbors. */
 export const DEATH_BLAST = { radius: 22, damage: 80 } as const;
 
-export type Phase = 'dropping' | 'aiming' | 'flying' | 'exploding' | 'settling' | 'roundOver';
+export type Phase =
+  'dropping' | 'aiming' | 'flying' | 'exploding' | 'crumbling' | 'settling' | 'roundOver';
 
 export type Command =
   | { type: 'aim'; delta: number }
@@ -61,7 +82,11 @@ export class Round {
   readonly terrain: Terrain;
   readonly terrainStyle: TerrainStyle;
   readonly tanks: Tank[];
+  readonly options: Readonly<GameOptions>;
+  readonly windLevel: WindLevel;
   readonly wind: number;
+  /** Whether shots bounce off the sides and ceiling this round. */
+  readonly walls: boolean;
   /** Tank ids sorted left to right at the start of the round; turns follow this order. */
   readonly order: readonly number[];
   phase: Phase = 'dropping';
@@ -72,6 +97,10 @@ export class Round {
   tickCount = 0;
   private events: RoundEvent[] = [];
   private readonly fallSpeed = new Map<number, number>();
+  /** y where each currently falling tank started falling. */
+  private readonly fallStart = new Map<number, number>();
+  private crumbler: Crumbler | null = null;
+  private crumbleTicks = 0;
 
   constructor(config: RoundConfig) {
     if (config.players.length < 2) throw new RangeError('A round needs at least 2 players');
@@ -84,7 +113,12 @@ export class Round {
     );
     this.terrain = gen.terrain;
     this.terrainStyle = gen.style;
-    this.wind = config.wind ?? this.rng.int(-60, 60);
+    this.options = { ...DEFAULT_OPTIONS, ...config.options };
+    this.windLevel = resolveWindLevel(this.rng, this.options.wind);
+    const wind = rollWind(this.rng, this.windLevel);
+    this.wind = config.wind ?? wind;
+    const walls = resolveWalls(this.rng, this.options.walls);
+    this.walls = config.walls ?? walls;
 
     const xs = this.placeTanks(config.players.length);
     this.tanks = config.players.map((p, i) => {
@@ -142,7 +176,10 @@ export class Round {
       case 'exploding':
         for (const e of this.explosions) e.age++;
         removeWhere(this.explosions, (e) => e.age >= EXPLOSION_TICKS);
-        if (this.explosions.length === 0) this.phase = 'settling';
+        if (this.explosions.length === 0) this.afterExplosions();
+        break;
+      case 'crumbling':
+        this.stepCrumble();
         break;
       case 'settling':
         if (!this.settleTanks()) this.resolveDeathsOrEndTurn();
@@ -170,6 +207,34 @@ export class Round {
     this.explosions.push({ x: blast.x, y: blast.y, radius: blast.radius, age: 0 });
     this.events.push({ type: 'explode', x: blast.x, y: blast.y, radius: blast.radius });
     this.phase = 'exploding';
+  }
+
+  /** Rolls the crumble chance: loose ground either collapses now or stays put this time. */
+  private afterExplosions(): void {
+    if (this.rng.chance(this.options.crumble / 100) && hasLooseDirt(this.terrain)) {
+      this.crumbler = new Crumbler(this.terrain);
+      this.crumbleTicks = 0;
+      this.phase = 'crumbling';
+    } else {
+      this.phase = 'settling';
+    }
+  }
+
+  private stepCrumble(): void {
+    const crumbler = this.crumbler;
+    let moved = false;
+    if (crumbler) {
+      // Accelerates like falling debris, up to CRUMBLE_MAX_PASSES px per tick.
+      const passes = Math.min(CRUMBLE_MAX_PASSES, 1 + Math.floor(this.crumbleTicks / 3));
+      for (let i = 0; i < passes; i++) moved = crumbler.pass() || moved;
+    }
+    this.crumbleTicks++;
+    // Tanks ride the collapsing ground down.
+    const tanksMoving = this.settleTanks();
+    if (!moved && !tanksMoving) {
+      this.crumbler = null;
+      this.phase = 'settling';
+    }
   }
 
   /** Kills one doomed tank at a time (its blast may doom others), then ends the turn. */
@@ -208,16 +273,23 @@ export class Round {
     return id;
   }
 
-  /** Moves unsupported tanks down (accelerating). Returns true while anything is still falling. */
+  /**
+   * Moves unsupported tanks down (accelerating) and applies fall damage on landing.
+   * Returns true while anything is still falling. With "tanks fall" off, tanks only fall
+   * during the initial drop and otherwise hover.
+   */
   private settleTanks(): boolean {
+    const initialDrop = this.phase === 'dropping';
+    if (!initialDrop && !this.options.tanksFall) return false;
     let moving = false;
     for (const t of this.tanks) {
       if (!t.alive) continue;
       if (isSupported(t, this.terrain)) {
-        this.fallSpeed.delete(t.id);
+        this.land(t, initialDrop);
         continue;
       }
       moving = true;
+      if (!this.fallStart.has(t.id)) this.fallStart.set(t.id, t.y);
       const speed = Math.min(TANK_FALL_SPEED, (this.fallSpeed.get(t.id) ?? 0) + 0.25);
       this.fallSpeed.set(t.id, speed);
       // Move a pixel at a time so the tank lands exactly on the surface.
@@ -229,6 +301,17 @@ export class Round {
       }
     }
     return moving;
+  }
+
+  private land(t: Tank, initialDrop: boolean): void {
+    const start = this.fallStart.get(t.id);
+    this.fallSpeed.delete(t.id);
+    this.fallStart.delete(t.id);
+    if (start === undefined || initialDrop) return;
+    const dmg = fallDamage(t.y - start);
+    if (dmg <= 0) return;
+    t.health = Math.max(0, t.health - dmg);
+    this.events.push({ type: 'tankHit', tankId: t.id, damage: dmg });
   }
 
   /** Picks spread-out x positions in random player order and flattens a pad under each. */
@@ -261,6 +344,10 @@ export class Round {
       }
     }
   }
+}
+
+export function fallDamage(distance: number): number {
+  return Math.round(Math.max(0, distance - FALL_DAMAGE_THRESHOLD) * FALL_DAMAGE_PER_PIXEL);
 }
 
 function clamp(v: number, lo: number, hi: number): number {

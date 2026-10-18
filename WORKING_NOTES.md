@@ -78,8 +78,15 @@ Equipment strip order in game = weapon index 0–17, then H, V (20 boxes).
 
 - Layout (Stage 1): 640×400 logical canvas, HUD band 0–64, field 624×320 at (8,72). The original's
   field was about 300×146 of 320×200, so ours is about 2× and a bit taller for 16:9 screens.
+- Crumble % = per-shot chance that _all_ loose ground collapses (column sand model), not per pixel.
+- Fall damage: (distance − 4 px) × 0.5. Initial drop-in is free.
 - Terrain surface band is 18–90% of field height from the top. Tanks will need headroom above the highest ground.
 
 ## Gotchas
 
-_Add as discovered._
+- **Browser pane hidden ⇒ rAF paused.** For visual verification, run a throwaway Playwright script
+  (`import { chromium } from '@playwright/test'`) against the dev server and screenshot into the
+  scratchpad. Scripts must run from the repo dir so `@playwright/test` resolves (copy in, run, delete).
+- Any element with a CSS `display` value ignores the `hidden` attribute unless there's a
+  `[hidden] { display: none !important }` rule (now in `style.css`).
+- Input commands apply on the next sim tick, so tests must poll after sending keys.

@@ -59,3 +59,9 @@ export function lighten(hex: string, t: number): string {
   const ch = (s: number) => Math.round(((v >> s) & 0xff) + (255 - ((v >> s) & 0xff)) * t);
   return `rgb(${ch(16)} ${ch(8)} ${ch(0)})`;
 }
+
+export function darken(hex: string, t: number): string {
+  const v = parseInt(hex.slice(1), 16);
+  const ch = (s: number) => Math.round(((v >> s) & 0xff) * (1 - t));
+  return `rgb(${ch(16)} ${ch(8)} ${ch(0)})`;
+}

@@ -16,3 +16,13 @@ test('boots, renders the canvas and advances the sim', async ({ page }) => {
   await expect.poll(ticks).toBeGreaterThan(first + 10);
   expect(errors).toEqual([]);
 });
+
+test('F2 toggles the options panel', async ({ page }) => {
+  await page.goto('/');
+  const panel = page.locator('form.dev-options');
+  await expect(panel).toBeHidden();
+  await page.keyboard.press('F2');
+  await expect(panel).toBeVisible();
+  await page.keyboard.press('F2');
+  await expect(panel).toBeHidden();
+});

@@ -8,7 +8,7 @@ const current = (page: Page) =>
   });
 
 test('a full round via the keyboard: aim, power, fire, round over, new round', async ({ page }) => {
-  await page.goto('/?seed=2');
+  await page.goto('/?seed=2&wind=none&walls=off');
   await expect.poll(() => phase(page), { timeout: 15_000 }).toBe('aiming');
   const start = (await current(page))!;
 

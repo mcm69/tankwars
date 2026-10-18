@@ -40,7 +40,12 @@ export class BattleRenderer {
   }
 
   /** Field-space drawing; the caller has translated the context to the field origin. */
-  drawField(ctx: CanvasRenderingContext2D, round: Round, alpha: number): void {
+  drawField(
+    ctx: CanvasRenderingContext2D,
+    round: Round,
+    alpha: number,
+    visibleShot: boolean,
+  ): void {
     for (const t of round.tanks) {
       if (!t.alive) continue;
       const x = Math.round(t.x);
@@ -72,13 +77,14 @@ export class BattleRenderer {
     }
 
     const p = round.projectile;
-    if (p) {
+    if (p && visibleShot) {
       const px = Math.round(p.prevX + (p.x - p.prevX) * alpha);
       const py = Math.round(p.prevY + (p.y - p.prevY) * alpha);
       ctx.fillStyle = '#ffe9a0';
       ctx.fillRect(px - 1, py - 1, 3, 3);
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(px, py, 1, 1);
+      this.drawTracking(ctx, px, py, round.terrain.width);
     }
 
     for (const e of round.explosions) {
@@ -102,6 +108,32 @@ export class BattleRenderer {
       ctx.fillText(f.text, Math.round(f.x), Math.round(f.y - f.age / 3));
     }
     ctx.textAlign = 'start';
+  }
+
+  /**
+   * "Tracking bars": when the shell is above or beside the field, a marker on that edge shows
+   * where it is, with a bar whose length grows with its distance from the field.
+   */
+  private drawTracking(ctx: CanvasRenderingContext2D, px: number, py: number, width: number) {
+    const color = '#ffe9a0';
+    ctx.fillStyle = color;
+    if (py < 0) {
+      const x = Math.min(width - 3, Math.max(2, px));
+      const bar = Math.min(24, Math.ceil(-py / 25));
+      ctx.fillRect(x - 2, 0, 5, 1);
+      ctx.fillRect(x - 1, 1, 3, 1);
+      ctx.fillRect(x, 2, 1, 2 + bar);
+    }
+    if (px < 0 || px >= width) {
+      const left = px < 0;
+      const edge = left ? 0 : width - 1;
+      const dir = left ? 1 : -1;
+      const y = Math.min(LAYOUT.field.h - 3, Math.max(2, py));
+      const bar = Math.min(24, Math.ceil((left ? -px : px - width) / 25));
+      ctx.fillRect(edge, y - 2, 1, 5);
+      ctx.fillRect(edge + dir, y - 1, 1, 3);
+      ctx.fillRect(left ? 2 : width - 4 - bar, y, 2 + bar, 1);
+    }
   }
 
   /** Advances presentation-only animations; call once per sim tick. */
@@ -128,6 +160,18 @@ export class BattleRenderer {
 
     const windDir = round.wind === 0 ? '' : round.wind > 0 ? ' →' : ' ←';
     label('Wind: ', `${Math.abs(round.wind)}${windDir}`, 250, 34, '#7fb4ff');
+    ctx.font = '10px monospace';
+    ctx.fillStyle = '#5c5378';
+    ctx.fillText(round.windLevel, 250, 52);
+    ctx.font = 'bold 15px monospace';
+
+    // The original's magenta "R": walls rebound this round.
+    if (round.walls) {
+      ctx.fillStyle = '#e040ff';
+      ctx.fillRect(480, 32, 18, 18);
+      ctx.fillStyle = '#1a1424';
+      ctx.fillText('R', 485, 34);
+    }
 
     if (t?.alive && round.phase !== 'dropping' && round.phase !== 'roundOver') {
       const { degrees, facing } = displayAngle(t.angle);
@@ -141,9 +185,9 @@ export class BattleRenderer {
       ctx.fillText(round.phase === 'roundOver' ? 'Round over' : 'Get ready…', 12, 10);
     }
     ctx.fillStyle = '#5c5378';
-    ctx.font = '10px monospace';
+    ctx.font = '9px monospace';
     ctx.textAlign = 'right';
-    ctx.fillText('←/→ angle  ↑/↓ power  PgUp/PgDn ±100  I flip  Space fire', hud.w - 8, 50);
+    ctx.fillText('←/→ angle ↑/↓ power PgUp/PgDn ±100 I flip Space fire  F2 options', hud.w - 8, 53);
     ctx.textAlign = 'start';
   }
 
