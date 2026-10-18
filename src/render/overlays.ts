@@ -16,6 +16,7 @@ export type Overlay =
 export interface OverlayContext {
   round: Round;
   roundNumber: number;
+  totalRounds: number;
   soundOn: boolean;
 }
 
@@ -104,7 +105,10 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, o: Overlay, c: Overla
   }
 }
 
-function drawPause(ctx: CanvasRenderingContext2D, { round, roundNumber, soundOn }: OverlayContext) {
+function drawPause(
+  ctx: CanvasRenderingContext2D,
+  { round, roundNumber, totalRounds, soundOn }: OverlayContext,
+) {
   const r = panel(ctx, 340, 172, 'Game Status');
   const o = round.options;
   const wind = `${o.wind === 'random' ? `random (${round.windLevel})` : o.wind}, now ${Math.abs(round.wind)}${round.wind > 0 ? '→' : round.wind < 0 ? '←' : ''}`;
@@ -113,7 +117,7 @@ function drawPause(ctx: CanvasRenderingContext2D, { round, roundNumber, soundOn 
     r.x + 20,
     r.y + 32,
     [
-      ['Round', `${roundNumber} (${round.terrainStyle} terrain)`],
+      ['Game', `${roundNumber} of ${totalRounds} (${round.terrainStyle} terrain)`],
       ['Sound', soundOn ? 'on' : 'off'],
       ['Ground crumbles', `${o.crumble}%`],
       ['Walls', `${o.walls}, bounce this round: ${yesNo(round.walls)}`],

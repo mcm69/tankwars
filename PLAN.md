@@ -44,10 +44,10 @@ It is **read-only research input**: nothing from it is bundled or copied into th
 5. **Pixel terrain.** The battlefield is a per-pixel material grid (`Uint8Array`: air,
    dirt, tank-occupied, etc.) plus a separate color layer, so craters, CRIs, dirt balls and
    crumbling all work per pixel.
-6. **Canvas for the battlefield, DOM for menus.** The playfield, HUD strip and in-game
-   overlays are canvas-rendered. Title/menu/setup/shop/status screens are DOM overlays
-   styled as pixel art. DOM is much easier to make touch-friendly, responsive and accessible.
-   (Revisit at Stage 6 if it looks wrong.)
+6. **Everything on the canvas.** _(Revised in Stage 6; the original plan had DOM menus.)_ The
+   playfield, HUD, overlays and all menu screens are canvas-rendered with the bitmap font and a
+   small widget kit (`src/ui/widgets.ts`), driven by Pointer Events and the keyboard, so the look
+   stays pixel-consistent. Text entry uses an off-screen `<input>` so soft keyboards and IME work.
 
 ### 2.2 Logical resolution
 

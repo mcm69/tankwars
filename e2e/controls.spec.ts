@@ -22,7 +22,7 @@ const state = (page: Page) =>
   });
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/?seed=2&wind=none&walls=off&crumble=0');
+  await page.goto('/?play&seed=2&wind=none&walls=off&crumble=0');
   await expect.poll(async () => (await state(page)).phase, { timeout: 15_000 }).toBe('aiming');
 });
 

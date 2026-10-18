@@ -18,14 +18,25 @@ export class KeyboardController {
   private readonly held = new Map<string, Held>();
   private readonly queue: InputEvent[] = [];
   private shift = false;
+  private readonly abort = new AbortController();
 
   constructor(target: Window = window) {
-    target.addEventListener('keydown', (e) => this.onKeyDown(e));
-    target.addEventListener('keyup', (e) => {
-      this.held.delete(e.code);
-      this.shift = e.shiftKey;
-    });
-    target.addEventListener('blur', () => this.held.clear());
+    const opts = { signal: this.abort.signal };
+    target.addEventListener('keydown', (e) => this.onKeyDown(e), opts);
+    target.addEventListener(
+      'keyup',
+      (e) => {
+        this.held.delete(e.code);
+        this.shift = e.shiftKey;
+      },
+      opts,
+    );
+    target.addEventListener('blur', () => this.held.clear(), opts);
+  }
+
+  /** Removes all listeners. */
+  dispose(): void {
+    this.abort.abort();
   }
 
   /** Events for this tick: queued presses plus auto-repeat from held arrows. */

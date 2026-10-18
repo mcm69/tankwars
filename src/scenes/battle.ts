@@ -1,10 +1,12 @@
+import { planTurn } from '../ai/registry';
+import type { App } from '../app';
 import { LAYOUT } from '../config';
 import { Rng } from '../core/rng';
+import type { GameSet } from '../game/set';
 import type { InputEvent, UiAction } from '../input/events';
 import { KeyboardController } from '../input/keyboard';
 import { PointerController } from '../input/pointer';
 import { BattleRenderer } from '../render/battle-renderer';
-import type { DebugOverlay } from '../render/debug-overlay';
 import { drawHud } from '../render/hud';
 import {
   drawOverlay,
@@ -13,53 +15,58 @@ import {
   type Overlay,
   type Toast,
 } from '../render/overlays';
-import type { Screen } from '../render/screen';
 import { darken, PLAYER_COLORS } from '../render/tank-sprite';
 import { renderSky, TerrainRenderer } from '../render/terrain-renderer';
 import { THEMES } from '../render/themes';
 import { TrailLayer } from '../render/trail-layer';
-import { GUIDANCE_H, GUIDANCE_V, ITEMS } from '../sim/items';
-import { DEFAULT_OPTIONS, type GameOptions } from '../sim/options';
-import { Round, type PlayerSetup } from '../sim/round';
-import { DevOptionsPanel } from '../ui/dev-options';
+import { GUIDANCE_H, GUIDANCE_V, ITEMS, LEAD_BALL } from '../sim/items';
+import type { Round } from '../sim/round';
+import type { Scene } from './scene';
 
 const TOAST_TICKS = 150;
+/** Ticks a computer "thinks" before playing (shorter when no humans are watching). */
+const AI_THINK_TICKS = 45;
+const AI_THINK_TICKS_FAST = 12;
+/** After a round ends: minimum ticks before a key continues, and the auto-continue delay. */
+const ROUND_OVER_MIN_TICKS = 30;
+const ROUND_OVER_AUTO_TICKS = 150;
 
 /**
- * Hot-seat battle on one keyboard and mouse, endless rounds. Owns the UI state around the sim:
- * overlays (pause, help, player status, confirmations), which freeze the sim while open, and
- * transient toast messages.
+ * One round of a set: hot-seat humans on keyboard/mouse plus computer players. Owns the UI
+ * state around the sim: overlays (pause, help, player status, confirmations), which freeze the
+ * sim while open, and transient toast messages.
  */
-export class BattleScene {
-  private round!: Round;
-  private roundNumber = 0;
-  private sky!: HTMLCanvasElement;
-  private terrainRenderer!: TerrainRenderer;
+export class BattleScene implements Scene {
+  readonly name = 'battle';
+  private readonly sky: HTMLCanvasElement;
+  private readonly terrainRenderer: TerrainRenderer;
   private readonly trails = new TrailLayer(LAYOUT.field.w, LAYOUT.field.h);
   private readonly renderer = new BattleRenderer();
   private readonly keyboard = new KeyboardController();
   private readonly pointer: PointerController;
-  private options: GameOptions;
+  private readonly aiRng: Rng;
   private overlay: Overlay | null = null;
   private toasts: Toast[] = [];
-  private soundOn = true;
+  private thinkTicks = 0;
+  private overTicks = 0;
 
   constructor(
-    container: HTMLElement,
-    private readonly screen: Screen,
-    private readonly debug: DebugOverlay,
-    private readonly seed: number,
-    private readonly players: readonly PlayerSetup[],
-    options: Partial<GameOptions> = {},
+    private readonly app: App,
+    private readonly set: GameSet,
+    private readonly round: Round,
   ) {
-    this.options = { ...DEFAULT_OPTIONS, ...options };
-    new DevOptionsPanel(container, this.options, (o) => (this.options = o));
     this.pointer = new PointerController(
-      screen,
+      app.screen,
       () => this.round,
       () => this.overlay !== null,
     );
-    this.newRound();
+    const seed = set.roundSeed();
+    // Presentation and AI use their own streams so they never perturb the round's RNG.
+    const theme = new Rng(seed ^ 0x5eed).pick(THEMES);
+    this.aiRng = new Rng(seed ^ 0xa1);
+    const { w, h } = LAYOUT.field;
+    this.sky = renderSky(w, h, theme);
+    this.terrainRenderer = new TerrainRenderer(w, h, theme);
   }
 
   /** Read-only views for tests and debugging. */
@@ -71,15 +78,9 @@ export class BattleScene {
     return this.overlay;
   }
 
-  private newRound(): void {
-    const seed = (this.seed + this.roundNumber * 0x9e3779b1) >>> 0;
-    this.roundNumber++;
-    this.round = new Round({ seed, players: this.players, options: this.options });
-    const theme = new Rng(seed ^ 0x5eed).pick(THEMES);
-    const { w, h } = LAYOUT.field;
-    this.sky = renderSky(w, h, theme);
-    this.terrainRenderer = new TerrainRenderer(w, h, theme);
-    this.trails.clear();
+  private isHumanTurn(): boolean {
+    const t = this.round.current;
+    return !!t && this.set.players[t.id]?.kind === 'human';
   }
 
   private toast(text: string, color = '#ffffff'): void {
@@ -103,16 +104,26 @@ export class BattleScene {
         if (this.handleOverlayInput(e)) skipRestOfPress = true;
         continue;
       }
-      if (e.kind === 'ui') this.handleUi(e.action);
-      else if (e.kind === 'command') {
-        if (this.round.phase === 'roundOver') {
-          if (e.cmd.type === 'fire') this.newRound();
-        } else {
-          this.round.command(e.cmd);
+      if (this.round.phase === 'roundOver') {
+        if (this.overTicks >= ROUND_OVER_MIN_TICKS && e.kind !== 'overlayClick') {
+          this.app.roundFinished();
+          return;
         }
+        continue;
       }
+      if (e.kind === 'ui') this.handleUi(e.action);
+      else if (e.kind === 'command' && this.isHumanTurn()) this.round.command(e.cmd);
     }
     if (this.overlay) return; // the sim is frozen while an overlay is open
+
+    if (this.round.phase === 'roundOver') {
+      this.overTicks++;
+      if (this.overTicks > ROUND_OVER_AUTO_TICKS && this.set.allComputers) {
+        this.app.roundFinished();
+        return;
+      }
+    }
+    this.stepComputer();
 
     this.round.tick();
     const roundEvents = this.round.drainEvents();
@@ -125,9 +136,30 @@ export class BattleScene {
     this.renderer.tick();
 
     const p = this.round.projectile;
-    if (p && this.options.shotTrail) {
+    if (p && this.set.settings.shotTrail) {
       const owner = this.round.tanks[p.ownerId]!;
       this.trails.segment(p.prevX, p.prevY, p.x, p.y, darken(PLAYER_COLORS[owner.color]!, 0.35));
+    }
+  }
+
+  /** Lets a computer player take its turn after a short "thinking" pause. */
+  private stepComputer(): void {
+    const t = this.round.current;
+    const player = t ? this.set.players[t.id] : undefined;
+    if (this.round.phase !== 'aiming' || !player || player.kind !== 'computer' || !player.ai) {
+      this.thinkTicks = 0;
+      return;
+    }
+    this.thinkTicks++;
+    if (this.thinkTicks < (this.set.allComputers ? AI_THINK_TICKS_FAST : AI_THINK_TICKS)) return;
+    this.thinkTicks = 0;
+    for (const cmd of planTurn(player.ai, this.round, this.aiRng)) {
+      const ok = this.round.command(cmd);
+      if (cmd.type === 'fire' && !ok) {
+        // Couldn't fire what it picked (e.g. a laser without energy): lob a Lead Ball instead.
+        this.round.command({ type: 'selectWeapon', index: LEAD_BALL });
+        this.round.command({ type: 'fire' });
+      }
     }
   }
 
@@ -154,8 +186,7 @@ export class BattleScene {
         this.toast('Mass kill: everyone dies after this turn', '#ff6a6a');
       }
     } else {
-      this.toast('Game aborted', '#ff6a6a');
-      this.newRound();
+      this.app.abortSet();
     }
     return true;
   }
@@ -171,10 +202,12 @@ export class BattleScene {
       case 'status':
         if (this.round.tanks[a.tankId]) this.overlay = { kind: 'status', tankId: a.tankId };
         break;
-      case 'sound':
-        this.soundOn = !this.soundOn;
-        this.toast(this.soundOn ? 'Sound on' : 'Sound off');
+      case 'sound': {
+        const sound = !this.app.settings.sound;
+        this.app.settings = { ...this.app.settings, sound };
+        this.toast(sound ? 'Sound on' : 'Sound off');
         break;
+      }
       case 'massKill':
         if (this.round.phase !== 'roundOver') this.overlay = { kind: 'confirm', what: 'massKill' };
         break;
@@ -192,15 +225,15 @@ export class BattleScene {
   }
 
   render(alpha: number): void {
-    const { ctx } = this.screen;
+    const { ctx, width, height } = this.app.screen;
     const { field } = LAYOUT;
     const round = this.round;
     this.terrainRenderer.update(round.terrain);
 
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, this.screen.width, this.screen.height);
+    ctx.fillRect(0, 0, width, height);
     drawHud(ctx, round, {
-      soundOn: this.soundOn,
+      soundOn: this.app.settings.sound,
       hover: this.overlay ? null : this.pointer.hover,
       pressed: this.pointer.pressed,
     });
@@ -217,7 +250,7 @@ export class BattleScene {
       ctx,
       round,
       this.overlay ? 0 : alpha,
-      this.options.visibleShot,
+      this.set.settings.visibleShot,
       this.pointer.aimPreview,
     );
     ctx.restore();
@@ -230,12 +263,21 @@ export class BattleScene {
     if (this.overlay) {
       drawOverlay(ctx, this.overlay, {
         round,
-        roundNumber: this.roundNumber,
-        soundOn: this.soundOn,
+        roundNumber: this.set.roundsPlayed + 1,
+        totalRounds: this.set.totalRounds,
+        soundOn: this.app.settings.sound,
       });
     }
 
-    this.debug.set('round', `${this.roundNumber} (${round.terrainStyle})`);
-    this.debug.set('phase', round.phase);
+    this.app.debug.set(
+      'round',
+      `${this.set.roundsPlayed + 1}/${this.set.totalRounds} (${round.terrainStyle})`,
+    );
+    this.app.debug.set('phase', round.phase);
+  }
+
+  dispose(): void {
+    this.keyboard.dispose();
+    this.pointer.dispose();
   }
 }

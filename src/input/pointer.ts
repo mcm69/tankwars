@@ -25,6 +25,7 @@ export class PointerController {
   aimPreview: { x: number; y: number } | null = null;
   private press: Press | null = null;
   private readonly queue: InputEvent[] = [];
+  private readonly abort = new AbortController();
 
   constructor(
     private readonly screen: Screen,
@@ -33,15 +34,28 @@ export class PointerController {
     private readonly overlayOpen: () => boolean,
   ) {
     const c = screen.canvas;
-    c.addEventListener('contextmenu', (e) => e.preventDefault());
-    c.addEventListener('pointerdown', (e) => this.down(e));
-    c.addEventListener('pointermove', (e) => this.move(e));
-    c.addEventListener('pointerup', (e) => this.up(e));
-    c.addEventListener('pointercancel', () => this.cancel());
-    c.addEventListener('pointerleave', () => {
-      this.hover = null;
+    const opts = { signal: this.abort.signal };
+    c.addEventListener('contextmenu', (e) => e.preventDefault(), opts);
+    c.addEventListener('pointerdown', (e) => this.down(e), opts);
+    c.addEventListener('pointermove', (e) => this.move(e), opts);
+    c.addEventListener('pointerup', (e) => this.up(e), opts);
+    c.addEventListener('pointercancel', () => this.cancel(), opts);
+    c.addEventListener(
+      'pointerleave',
+      () => {
+        this.hover = null;
+      },
+      opts,
+    );
+    c.addEventListener('wheel', (e) => this.wheel(e), {
+      passive: false,
+      signal: this.abort.signal,
     });
-    c.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
+  }
+
+  /** Removes all listeners. */
+  dispose(): void {
+    this.abort.abort();
   }
 
   get pressed(): HudId | null {

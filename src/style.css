@@ -35,50 +35,15 @@ body {
   pointer-events: none;
 }
 
-.dev-options {
-  position: fixed;
-  top: 8px;
-  right: 8px;
-  display: grid;
-  gap: 6px;
-  width: 210px;
-  padding: 10px 12px;
-  font:
-    12px/1.3 ui-monospace,
-    monospace;
-  color: #ddd;
-  background: rgb(20 14 32 / 92%);
-  border: 1px solid #c050ff;
-}
-
-.dev-options h2 {
-  margin: 0 0 4px;
-  font-size: 13px;
-  color: #c050ff;
-}
-
-.dev-options h2 small {
-  color: #776;
-  font-weight: normal;
-}
-
-.dev-options label {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.dev-options label:has(input[type='checkbox']) {
-  justify-content: flex-start;
-}
-
-.dev-options p {
-  margin: 4px 0 0;
-  color: #887;
-  font-size: 11px;
-}
-
 [hidden] {
   display: none !important;
+}
+
+/* Off-screen input that feeds canvas text fields (keeps soft keyboards working). */
+.text-entry {
+  position: fixed;
+  left: -1000px;
+  top: 0;
+  width: 200px;
+  opacity: 0;
 }

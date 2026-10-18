@@ -8,7 +8,7 @@ const current = (page: Page) =>
   });
 
 test('a full round via the keyboard: aim, power, fire, round over, new round', async ({ page }) => {
-  await page.goto('/?seed=2&wind=none&walls=off');
+  await page.goto('/?play&seed=2&wind=none&walls=off');
   await expect.poll(() => phase(page), { timeout: 15_000 }).toBe('aiming');
   const start = (await current(page))!;
 
@@ -36,6 +36,19 @@ test('a full round via the keyboard: aim, power, fire, round over, new round', a
   const winner = await page.evaluate(() => window.__tankwars?.round?.winnerId);
   expect(winner).toBe(1 - start.id);
 
-  await page.keyboard.press('Enter');
+  // Any key → between-games status screen → any key → the next game.
+  const scene = () => page.evaluate(() => window.__tankwars?.scene);
+  await expect
+    .poll(async () => {
+      await page.keyboard.press('Enter');
+      return scene();
+    })
+    .toBe('status');
+  await expect
+    .poll(async () => {
+      await page.keyboard.press('Enter');
+      return scene();
+    })
+    .toBe('battle');
   await expect.poll(() => phase(page), { timeout: 15_000 }).toMatch(/dropping|aiming/);
 });

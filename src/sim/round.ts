@@ -72,6 +72,17 @@ export type Command =
   /** Everyone dies once the current turn is over (the original's Ctrl-M). */
   | { type: 'massKill' };
 
+/** Per-tank tallies for one round, for scoring. */
+export interface RoundStats {
+  /** Damage dealt to other tanks during this tank's turns. */
+  damageDealt: number;
+  /** Damage this tank did to itself. */
+  selfDamage: number;
+  kills: number;
+  /** Id of the tank whose turn it was when this one died (-1 = mass kill, null = survived). */
+  killedBy: number | null;
+}
+
 /** Margin kept free at each side when placing tanks. */
 const PLACEMENT_MARGIN = 24;
 /** Half-width of the flat pad flattened under each tank. */
@@ -103,6 +114,12 @@ export class Round implements World {
   readonly effects = new Effects();
   forceCrumble = false;
   tickCount = 0;
+  /**
+   * Scoring tallies. Everything that happens during a turn (blasts, debris, falls, chain
+   * deaths) is credited to the tank whose turn it is.
+   */
+  readonly stats: RoundStats[];
+  private massKilling = false;
   private events: RoundEvent[] = [];
   private readonly fallSpeed = new Map<number, number>();
   /** y where each currently falling tank started falling. */
@@ -138,6 +155,12 @@ export class Round implements World {
       return createTank(i, p.name, p.color, xs[i]!, -this.rng.int(8, 80), p.inventory);
     });
     this.order = [...this.tanks].sort((a, b) => a.x - b.x).map((t) => t.id);
+    this.stats = this.tanks.map(() => ({
+      damageDealt: 0,
+      selfDamage: 0,
+      kills: 0,
+      killedBy: null,
+    }));
   }
 
   get current(): Tank | undefined {
@@ -151,7 +174,11 @@ export class Round implements World {
   damage(tankId: number, amount: number): void {
     const t = this.tanks[tankId];
     if (!t?.alive || amount <= 0) return;
-    t.health = Math.max(0, t.health - amount);
+    const dealt = Math.min(t.health, amount);
+    t.health -= dealt;
+    const src = this.currentId;
+    if (src === tankId) this.stats[tankId]!.selfDamage += dealt;
+    else if (src >= 0) this.stats[src]!.damageDealt += dealt;
     this.events.push({ type: 'tankHit', tankId, damage: amount });
   }
 
@@ -327,12 +354,16 @@ export class Round implements World {
     const doomed = this.order.map((id) => this.tanks[id]!).find((t) => t.alive && t.health <= 0);
     if (doomed) {
       doomed.alive = false;
+      const killer = this.massKilling ? -1 : this.currentId;
+      this.stats[doomed.id]!.killedBy = killer;
+      if (killer >= 0 && killer !== doomed.id) this.stats[killer]!.kills++;
       this.effects.startDeath(this, doomed, this.deathStyleOverride ?? pickDeathStyle(this.rng));
       this.phase = 'effects';
       return;
     }
     if (this.massKillPending) {
       this.massKillPending = false;
+      this.massKilling = true;
       for (const t of this.tanks) if (t.alive) t.health = 0;
       return; // the next settling tick resolves the deaths one by one
     }

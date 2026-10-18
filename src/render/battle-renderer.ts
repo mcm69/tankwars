@@ -267,6 +267,6 @@ export class BattleRenderer {
       3,
       'center',
     );
-    drawText(ctx, 'Press Space or Enter for a new round', cx, cy + 12, '#cccccc', 1, 'center');
+    drawText(ctx, 'Press any key to continue', cx, cy + 12, '#cccccc', 1, 'center');
   }
 }

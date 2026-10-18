@@ -7,7 +7,7 @@ test('?arsenal arms every weapon; a CRI and a laser both resolve into the next t
 }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('/?seed=3&arsenal&wind=none&walls=off');
+  await page.goto('/?play&seed=3&arsenal&wind=none&walls=off');
   await expect.poll(() => phase(page), { timeout: 15_000 }).toBe('aiming');
   const owned = await page.evaluate(
     () => window.__tankwars!.round!.current!.inventory.slice(0, 18).filter((n) => n > 0).length,

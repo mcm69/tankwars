@@ -82,6 +82,9 @@ Equipment strip order in game = weapon index 0–17, then H, V (20 boxes).
 - Canvas text uses only the bitmap font in `src/render/font.ts` (crisp at logical pixels). Add glyphs there if new symbols are needed; tests check that every glyph is well-formed.
 - Weapon interpretations (Stage 5): the laser spends energy equal to power (minimum 100) as a straight beam that tunnels and pierces; CRI number = pixel budget, D = 8-neighbor dense spread and ND = 4-neighbor ragged spread; Explosive Dirt clods _freeze mid-air_ when their lifetime ends ("may just stay there"); duds bore through tanks for 25 damage.
 - Death styles (from REVISION.HST 1.2: dirt, fading away, nuclear meltdown, plus the standard explosion) with weights 55/15/15/15.
+- Menus are canvas-drawn too (not DOM). Name entry uses an off-screen `<input>`, and keys that arrive before it's focused are fed to it via `TextEntry.feed`.
+- Scoring is provisional (Stage 6): damage dealt − self-damage + 150/kill + 300/win. All damage during a turn is credited to that turn's shooter.
+- The original's player types K (keyboard) and M (mouse) are merged into "Human", since every human can use every device.
 - Crumble % = per-shot chance that _all_ loose ground collapses (column sand model), not per pixel.
 - Fall damage: (distance − 4 px) × 0.5. Initial drop-in is free.
 - Terrain surface band is 18–90% of field height from the top. Tanks will need headroom above the highest ground.
