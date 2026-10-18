@@ -1,4 +1,5 @@
 import './style.css';
+import { AI_IDS, type AiId } from './ai/registry';
 import { App } from './app';
 import { LOGICAL_HEIGHT, LOGICAL_WIDTH, TICK_RATE } from './config';
 import { GameLoop } from './core/loop';
@@ -50,12 +51,16 @@ if (params.has('lab')) {
   app = a;
   if (params.has('play')) {
     // ?play skips the title and menus: ?players=N, ?cpu=N (last N players are computers),
+    // ?ai=lobber (their personality; default random),
     // ?games=N, ?seed=N, ?arsenal, ?money=N, plus option params like ?wind=none&walls=on&crumble=100.
     const players = Math.min(10, Math.max(2, Number(params.get('players')) || 2));
     const cpu = Math.min(players, Math.max(0, Number(params.get('cpu')) || 0));
+    const aiParam = params.get('ai');
+    const ai: AiId = AI_IDS.includes(aiParam as AiId) ? (aiParam as AiId) : 'random';
     const slots: PlayerSlot[] = defaultSlots().map((s, i) => ({
       ...s,
       kind: i >= players - cpu ? 'computer' : 'human',
+      ai,
       name: i >= players - cpu ? `CPU ${i + 1}` : `Player ${i + 1}`,
     }));
     a.quickStart({

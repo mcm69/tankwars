@@ -1,7 +1,7 @@
 # Status
 
-**Current stage:** Stage 7 — Economy, shop, guidance & shields (complete, awaiting review)
-**Next:** Stage 8 — Computer opponents
+**Current stage:** Stage 8 — Computer opponents (complete, awaiting review)
+**Next:** Stage 9 — Audio
 **Last updated:** 2026-10-18
 
 See [PLAN.md](PLAN.md) for the full stage list. Update this file at the end of every work session
@@ -16,8 +16,8 @@ and at every stage boundary.
 - [x] 4 — HUD & full controls (desktop)
 - [x] 5 — Weapon system & full arsenal
 - [x] 6 — Game flow: title, menu, player setup, sets
-- [x] 7 — Economy, shop, guidance & shields (awaiting review)
-- [ ] 8 — Computer opponents
+- [x] 7 — Economy, shop, guidance & shields
+- [x] 8 — Computer opponents (awaiting review)
 - [ ] 9 — Audio
 - [ ] 10 — Touch & responsive layout
 - [ ] 11 — Persistence
@@ -26,15 +26,25 @@ and at every stage boundary.
 
 ## Current stage progress
 
-Stage 7 is done: money matters, and guidance and shields work.
+Stage 8 is done: the six original computer opponents (plus one new one) play as the manual describes, buy equipment, and can be pitted against each other headlessly.
 
-- **Economy** (`src/game/economy.ts`): each game pays $500 base + $10 per point of round score (score itself is still damage − self-damage + 150/kill + 300/win). Money is shown on the status screen. Twenty items are for sale (all but Lead Balls and Grenades), at the original's prices and bundles. Cart and purchase logic is pure and tested.
-- **Shop** (`src/scenes/shop.ts`): after each status screen (not after the last game), every human who can afford the cheapest item ($3,000) shops in turn. Two columns of items, each with icon, bundle and price, what you already have, a −/+ quantity, and the original's red/dark affordability light. Unallocated and total money show at the top; Purchase buys and stays, Done buys and leaves, Esc leaves without buying the selection. Keys: arrows, +/−, P, D, Esc; mouse: −/+, row click (right-click removes), wheel. Input is ignored for 15 ticks on entry so a stray key can't buy anything. Computers don't shop yet (Stage 8).
-- **Shields** (`absorbWithShields` in `round.ts`): they're automatic while you have units. The Energy Shield soaks blasts, debris, lasers, reactions and duds at 5 units per point (1000 units ≈ 200 damage); the Inertia Dampener soaks fall damage one-for-one. A cyan bubble shows on shielded tanks and flashes on absorb, with "shield N" / "damper N" floaters. `World.damage` takes a `kind` (`blast` | `fall`).
-- **Guidance** (`physics.ts`): `setGuidance` / `clearGuidance` commands; firing spends one unit and disarms. **Herb's (H)** locks onto the target's column when the shell passes over it and drops straight down (wind no longer applies). **Vick's (V)** locks onto the target's height when the descending shell reaches it and flies level at the target (no gravity). Neither helps if the shell never crosses the line. Lasers ignore guidance.
-- **Target picker**: H/V (keys or strip slots) opens a picker that starts on the nearest enemy; ←→ cycle, Enter confirm, Esc cancel, or click a tank. Pressing H/V again disarms. The armed slot turns red and a crosshair marks the target.
-- `?money=N` gives starting money in `?play` sets; `?arsenal` now also includes guidance and shields.
-- Tests: 136 unit tests (new: income, buyable list, cart and budget, purchase bundles and refusals, set income; both shields standalone and in a round; H drops onto the column, V flies level into the target, guidance validation, spending and disarming) + 13 e2e tests (new: shop purchase carries into the next game; H picker arms and disarms). The e2e helpers (`e2e/helpers.ts`) are now race-free around screen transitions. I checked the shop, picker and shields with headless screenshots.
+- **Thinking by probing** (`src/ai/probe.ts`): `probeShot` simulates a shot with the real physics on the current terrain without changing anything, optionally assuming a different wind or walls. AIs search over probes (bisection on power per elevation), so "exact physics" really is exact. `Round.shotLog` records every shot and its impact, which Lobber learns from.
+- **Personalities** (`src/ai/strategies.ts`):
+  - **Mr. Stupid**: random weapon, angle (any direction) and power.
+  - **Lobber**: two ranging shots at 75° with his cheapest weapon, then targets whoever is nearest his last impact and scales power by √(wanted range / last range). Rebound and strong wind confuse him.
+  - **Rifleman**: points straight at the nearest enemy above him at full power (and fast shells dud more), otherwise random. He uses a laser on any enemy in reach when he has the energy.
+  - **Windless Wit**: probe-perfect aim that assumes no wind.
+  - **Lob & Shoot**: Lobber without bouncing walls, Rifleman with them.
+  - **Twanger**: Rifleman without walls. With walls he grid-searches steep shots that bank off the ceiling onto the easiest kill (weakest, then nearest), and banks in 19/20 test setups.
+  - **Birdy Bonker** (new, the hidden name found in BOMB.EXE): probes with the real wind and walls, picks off the weakest, with a hair of error. Selectable, but not in "Random" (which picks from the original six).
+- **Weapon choice**: the strongest owned blast that won't catch the shooter (radius + 18 < distance). Lasers are priced by walking the beam line (air/dirt costs).
+- **Buying** (`src/ai/buy.ts`, `GameSet.computersShop`): when "Computers can buy" is on, each computer works through a per-personality priority list (shields and lasers for the smart ones, bigger bombs for the lobbers, random junk for Mr. Stupid), at most two bundles each, keeping ~15% back.
+- **In the game** (`battle.ts`): after a think pause the turret visibly swings and the power winds to the plan before firing. All-computer games run at 3× speed with instant aiming, and call a **stalemate mass kill** after 30 shots per player (the original left that to a human's Ctrl-M).
+- **Tournament harness**: `npm run sim -- [--ais a,b] [--games N] [--seed S] [--wind ...] [--walls ...] [--mode duel|ffa|both]` (via `tsx`; logic in `src/ai/tournament.ts`). It prints duel and free-for-all win rates plus a head-to-head matrix. A full run takes about 3 s.
+- `?play&cpu=N&ai=<id>` chooses the computers' personality (default random).
+- Tests: 152 unit tests (new: probe accuracy and purity; Windless hits in calm air and ignores wind; Rifleman's direct aim; Lobber ranges at 75° then homes in; Twanger banks; Lob & Shoot switches; every AI makes legal plans; weapon safety; laser pricing; shopping never overspends and has priorities; tournament runs and ranks Windless over Stupid) + 13 e2e tests; all pass. I watched mixed and all-computer sets play to Final Results headlessly.
+
+**Tournament (20 games per pairing, standard wind, random walls, seed 1), duel win rates:** Birdy Bonker 95%, Windless Wit 48%, Lob & Shoot 48%, Lobber 46%, Twanger 40%, Rifleman 22%, Mr. Stupid 10%. With walls off: Lob & Shoot 62%, Lobber 54%, Windless 43%, Twanger/Rifleman 18%. With walls on: Twanger 55% (best of the originals), Windless 50%, Lobber 29%, Rifleman 27%, Lob & Shoot 24%. Windless Wit: 100% with no wind, 50% in high wind. This matches the manual's threat descriptions.
 
 ## Implementation notes
 
@@ -59,6 +69,7 @@ Stage 7 is done: money matters, and guidance and shields work.
 - Dirt falling onto a tank passes through it (tanks aren't in the material grid), so a tank can end up buried. Shots still hit it, because tanks are checked before terrain.
 - Settings are copied into the `GameSet` at set start; changing the menu affects only the next set.
 - Economy, shield and guidance numbers are first-pass (income $500 + $10/point, shield 5 units/damage, level flight at 3 px/tick). Stage 13 tunes them.
+- AIs use their own RNG stream per round (`roundSeed ^ 0xa1`) and per-round memory, so they never perturb the round's RNG. The headless and in-game paths share `planTurn`.
 - Screens that open on a key press (results, shop) ignore input for a short grace period, so a held or double-pressed key doesn't skip or buy.
 - The angle is clamped to 0–180; the original wrapped around instead. I clamped deliberately because it's less confusing.
 - The Vitest config lives in `vite.config.ts` (imported from `vitest/config`). Unit tests are in `tests/`, e2e tests in `e2e/`.
@@ -66,12 +77,10 @@ Stage 7 is done: money matters, and guidance and shields work.
 
 ## Playtest script for current stage
 
-1. Play a normal set (menu → setup with two humans or human vs CPU, 5 games). After each game the status screen shows money. Humans with $3,000+ get the shop: add bundles with + or clicks, watch Unallocated drop, then Purchase or Done. Your purchases show up in the next game's strip.
-2. Quick shop test: http://localhost:5173/?play&games=3&money=50000. End the game (K, Y, fire), continue, and shop.
-3. Guidance and shields: http://localhost:5173/?play&arsenal&players=3&wind=none.
-   - Press H, pick a target with ←→, Enter. Fire high and long: the shell drops straight down onto the target's column.
-   - Press V, pick a target on a hill, and lob a shell that comes down at the target's height: it levels off and flies straight at it.
-   - Everyone has an Energy Shield (cyan bubble). Shots get soaked ("shield N") until it's spent, then hurt. Falls are soaked by the Inertia Dampener.
+1. Menu → setup → make player 2 a computer and pick a personality (←→), then start. Watch it think, swing the turret and fire. Try **Windless Wit** with Wind None (deadly) and with Wind Gale (harmless), **Twanger** with walls Yes (bank shots), and **Lobber** (ranging shots, then closing in).
+2. Shows: http://localhost:5173/?play&players=4&cpu=4&games=3 (random personalities; plays itself at 3×, and stalemates end in a mass kill), or force one with `&ai=twanger&walls=on`.
+3. Computers buy between games (see their strips next game; turn "Computers can buy" off in the menu to stop it).
+4. `npm run sim -- --games 20` prints the tournament tables. Try `--walls on`, `--wind none`, or `--ais lobber,twanger --mode duel`.
 
 ## Known issues
 
@@ -79,8 +88,7 @@ Stage 7 is done: money matters, and guidance and shields work.
 - While the desktop app's browser pane is hidden, rAF stops entirely. That's a pane artifact, not a game bug. Use headless Playwright for visual checks (see WORKING_NOTES).
 - Column collapse can leave sheer vertical walls at the edges of a collapsed area. That's inherent to the column model and fits the original's look.
 - The dev FPS overlay covers the top-left of the HUD in dev builds (toggle with F3).
-- All computer personalities play randomly until Stage 8, so an all-computer game can take a while (use K to mass kill).
-- Computers don't buy anything yet (Stage 8), even with "Computers can buy" on.
+- AI quirks are deliberate: Lobber and Lob & Shoot flounder with bouncing walls; Windless Wit repeats wind-blind misses; Rifleman is harmless unless you're above him.
 - The Background and Background speed menu options are stored but not rendered until Stage 12; sound options wait for Stage 9.
 - A CRI 20/D on a full field burns about 30k pixels in roughly 2.3 s. It's fine on desktop; check phones in Stage 10/13.
 - Tanks buried by dirt can still fire, but their shells hit the dirt right away and hurt them, which is deliberate ("death by dirt").

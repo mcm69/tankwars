@@ -86,6 +86,16 @@ export interface RoundStats {
   killedBy: number | null;
 }
 
+/** One shot and where it ended up: public information that computer players learn from. */
+export interface ShotRecord {
+  readonly tankId: number;
+  readonly angle: number;
+  readonly power: number;
+  readonly weapon: number;
+  /** Where it landed, or null if it left the field (or hasn't landed yet). */
+  impact: { x: number; y: number } | null;
+}
+
 /** Margin kept free at each side when placing tanks. */
 const PLACEMENT_MARGIN = 24;
 /** Half-width of the flat pad flattened under each tank. */
@@ -122,6 +132,8 @@ export class Round implements World {
    * deaths) is credited to the tank whose turn it is.
    */
   readonly stats: RoundStats[];
+  /** Every shot fired this round, oldest first. */
+  readonly shotLog: ShotRecord[] = [];
   private massKilling = false;
   private events: RoundEvent[] = [];
   private readonly fallSpeed = new Map<number, number>();
@@ -261,6 +273,13 @@ export class Round implements World {
       this.reselectIfEmpty(t);
       this.events.push({ type: 'fire', tankId: t.id, weapon });
       const { points } = fireLaser(this, t, energy);
+      this.shotLog.push({
+        tankId: t.id,
+        angle: t.angle,
+        power: energy,
+        weapon,
+        impact: points[points.length - 1] ?? null,
+      });
       this.effects.beam(points, t.color);
       this.events.push({ type: 'laser', tankId: t.id });
       this.phase = 'effects';
@@ -270,6 +289,7 @@ export class Round implements World {
     t.inventory[weapon] = Math.max(0, t.inventory[weapon]! - 1);
     this.reselectIfEmpty(t);
     this.projectile = launch(t, weapon);
+    this.shotLog.push({ tankId: t.id, angle: t.angle, power: t.power, weapon, impact: null });
     const g = t.guidance;
     const target = g ? this.tanks[g.targetId] : undefined;
     if (g && target?.alive) {
@@ -334,6 +354,8 @@ export class Round implements World {
       }
     }
     this.projectile = null;
+    const record = this.shotLog[this.shotLog.length - 1];
+    if (record && r.kind !== 'lost') record.impact = { x: r.x, y: r.y };
     if (r.kind === 'lost') {
       this.phase = 'settling';
       return;

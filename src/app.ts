@@ -88,6 +88,7 @@ export class App {
   afterStatus(): void {
     const set = this.set;
     if (!set) return this.showMenu();
+    set.computersShop();
     const shoppers = set.players.filter((p) => p.kind === 'human' && p.money >= CHEAPEST_PRICE);
     const next = (): void => {
       const p = shoppers.shift();

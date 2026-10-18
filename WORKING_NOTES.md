@@ -88,6 +88,8 @@ Equipment strip order in game = weapon index 0–17, then H, V (20 boxes).
 - Economy (Stage 7): income = $500 + $10 × max(0, round score). Shields are passive while you have units: the Energy Shield costs 5 units per damage point (1000 ≈ 200 damage), the Inertia Dampener 1 unit per fall-damage point.
 - Guidance interpretation: H = lock onto the target's x when crossing it, then fall straight down; V = lock onto the target's y when descending through it, then fly level at the target. Both are "easy to misuse" by design.
 - E2E: use `e2e/helpers.ts` (`pressUntilScene`, `continueToNext`, `finishGame`); they check state before pressing, because screens change mid-poll.
+- AI (Stage 8): plans come from probes (`src/ai/probe.ts`), using the real physics on the real terrain. "Birdy Bonker" (a string in BOMB.EXE) is implemented as a new expert AI, kept out of the Random pool. All-computer games: 3× speed and a stalemate mass kill at 30 shots per player.
+- `npm run sim` (tsx) runs the AI tournament; use it to sanity-check difficulty after any physics or weapon tuning.
 - Crumble % = per-shot chance that _all_ loose ground collapses (column sand model), not per pixel.
 - Fall damage: (distance − 4 px) × 0.5. Initial drop-in is free.
 - Terrain surface band is 18–90% of field height from the top. Tanks will need headroom above the highest ground.

@@ -1,4 +1,4 @@
-import { planTurn } from '../ai/registry';
+import { planTurn, type AiMemory, type AiPlan } from '../ai/registry';
 import type { App } from '../app';
 import { LAYOUT } from '../config';
 import { Rng } from '../core/rng';
@@ -21,13 +21,20 @@ import { THEMES } from '../render/themes';
 import { TrailLayer } from '../render/trail-layer';
 import { GUIDANCE_H, GUIDANCE_V, ITEMS, LEAD_BALL } from '../sim/items';
 import type { Round } from '../sim/round';
-import { TANK_HALF_WIDTH, TANK_HEIGHT } from '../sim/tank';
+import { maxPower, TANK_HALF_WIDTH, TANK_HEIGHT } from '../sim/tank';
 import type { Scene } from './scene';
 
 const TOAST_TICKS = 150;
 /** Ticks a computer "thinks" before playing (shorter when no humans are watching). */
 const AI_THINK_TICKS = 45;
 const AI_THINK_TICKS_FAST = 12;
+/** Sim ticks per frame when only computers play. */
+const ALL_COMPUTER_SPEED = 3;
+/**
+ * Computer-only games that drag on this long (shots per player) end in a mass kill, the way a
+ * human would press Ctrl-M in the original when "battles between computers go on for hours".
+ */
+const STALEMATE_SHOTS_PER_PLAYER = 30;
 /** After a round ends: minimum ticks before a key continues, and the auto-continue delay. */
 const ROUND_OVER_MIN_TICKS = 30;
 const ROUND_OVER_AUTO_TICKS = 150;
@@ -49,6 +56,8 @@ export class BattleScene implements Scene {
   private overlay: Overlay | null = null;
   private toasts: Toast[] = [];
   private thinkTicks = 0;
+  private aiPlan: AiPlan | null = null;
+  private readonly aiMemory = new Map<number, AiMemory>();
   private overTicks = 0;
 
   constructor(
@@ -124,13 +133,19 @@ export class BattleScene implements Scene {
         return;
       }
     }
-    this.stepComputer();
+    // With no humans watching, play at triple speed (the original sped up computer-only games).
+    const steps = this.set.allComputers ? ALL_COMPUTER_SPEED : 1;
+    for (let i = 0; i < steps && this.round.phase !== 'roundOver'; i++) this.simStep();
+  }
 
+  /** One sim tick plus everything that reacts to it. */
+  private simStep(): void {
+    this.stepComputer();
     this.round.tick();
     const roundEvents = this.round.drainEvents();
     this.renderer.onEvents(this.round, roundEvents);
     for (const e of roundEvents) {
-      if (e.type === 'fireRejected') {
+      if (e.type === 'fireRejected' && this.isHumanTurn()) {
         this.toast('Laser needs 100+ energy: raise power', '#ff9a6a');
       }
     }
@@ -143,24 +158,56 @@ export class BattleScene implements Scene {
     }
   }
 
-  /** Lets a computer player take its turn after a short "thinking" pause. */
+  /**
+   * Lets a computer player take its turn: a short "thinking" pause, then the turret visibly
+   * swings and the power winds to the planned values before it fires. With no humans playing,
+   * it all happens at once.
+   */
   private stepComputer(): void {
     const t = this.round.current;
     const player = t ? this.set.players[t.id] : undefined;
-    if (this.round.phase !== 'aiming' || !player || player.kind !== 'computer' || !player.ai) {
+    if (
+      this.round.phase !== 'aiming' ||
+      !t ||
+      !player ||
+      player.kind !== 'computer' ||
+      !player.ai
+    ) {
       this.thinkTicks = 0;
+      this.aiPlan = null;
       return;
     }
-    this.thinkTicks++;
-    if (this.thinkTicks < (this.set.allComputers ? AI_THINK_TICKS_FAST : AI_THINK_TICKS)) return;
+    const fast = this.set.allComputers;
+    if (
+      fast &&
+      !this.round.massKillPending &&
+      this.round.shotLog.length >= STALEMATE_SHOTS_PER_PLAYER * this.set.players.length
+    ) {
+      this.round.command({ type: 'massKill' });
+      this.toast('Stalemate! Mass kill after this turn', '#ff6a6a');
+    }
+    if (!this.aiPlan) {
+      this.thinkTicks++;
+      if (this.thinkTicks < (fast ? AI_THINK_TICKS_FAST : AI_THINK_TICKS)) return;
+      let memory = this.aiMemory.get(t.id);
+      if (!memory) this.aiMemory.set(t.id, (memory = {}));
+      this.aiPlan = planTurn(player.ai, this.round, this.aiRng, memory);
+      if (!this.aiPlan) return;
+      this.round.command({ type: 'selectWeapon', index: this.aiPlan.weapon });
+    }
+    const plan = this.aiPlan;
+    const wantPower = Math.min(plan.power, maxPower(t));
+    const da = plan.angle - t.angle;
+    const dp = wantPower - t.power;
+    if (da !== 0) this.round.command({ type: 'aim', delta: clampStep(da, fast ? 180 : 2) });
+    if (dp !== 0) this.round.command({ type: 'power', delta: clampStep(dp, fast ? 1000 : 25) });
+    if (da !== 0 || dp !== 0) return;
+    this.aiPlan = null;
     this.thinkTicks = 0;
-    for (const cmd of planTurn(player.ai, this.round, this.aiRng)) {
-      const ok = this.round.command(cmd);
-      if (cmd.type === 'fire' && !ok) {
-        // Couldn't fire what it picked (e.g. a laser without energy): lob a Lead Ball instead.
-        this.round.command({ type: 'selectWeapon', index: LEAD_BALL });
-        this.round.command({ type: 'fire' });
-      }
+    if (!this.round.command({ type: 'fire' })) {
+      // Couldn't fire what it picked (e.g. a laser without energy): lob a Lead Ball instead.
+      this.round.command({ type: 'selectWeapon', index: LEAD_BALL });
+      this.round.command({ type: 'fire' });
     }
   }
 
@@ -336,4 +383,8 @@ export class BattleScene implements Scene {
     this.keyboard.dispose();
     this.pointer.dispose();
   }
+}
+
+function clampStep(delta: number, max: number): number {
+  return Math.max(-max, Math.min(max, delta));
 }

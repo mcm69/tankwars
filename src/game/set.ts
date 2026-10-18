@@ -1,6 +1,7 @@
-import { resolveAi, type AiId } from '../ai/registry';
+import { resolveAi, type ConcreteAi } from '../ai/registry';
 import { Rng } from '../core/rng';
-import { roundIncome } from './economy';
+import { aiShoppingList } from '../ai/buy';
+import { purchase, roundIncome } from './economy';
 import { startingInventory } from '../sim/items';
 import { Round, type RoundStats } from '../sim/round';
 import { gameOptionsOf, type PlayerKind, type PlayerSlot, type Settings } from './settings';
@@ -11,7 +12,7 @@ export interface SetPlayer {
   readonly color: number;
   readonly kind: PlayerKind;
   /** Concrete personality for computers ("random" resolved at set start). */
-  readonly ai: Exclude<AiId, 'random'> | null;
+  readonly ai: ConcreteAi | null;
   /** Carried from round to round. */
   inventory: number[];
   score: number;
@@ -115,6 +116,23 @@ export class GameSet {
     });
     this.roundsPlayed++;
     this.round = null;
+  }
+
+  /**
+   * Computer players spend their money (when the setting allows). Deterministic per game.
+   * Returns what each computer bought, by player index, for display.
+   */
+  computersShop(): Map<number, number[]> {
+    const bought = new Map<number, number[]>();
+    if (!this.settings.computersBuy) return bought;
+    const rng = new Rng(this.roundSeed() ^ 0xb0b);
+    for (const p of this.players) {
+      if (p.kind !== 'computer' || !p.ai) continue;
+      const cart = aiShoppingList(p.ai, p.money, p.inventory, rng);
+      p.money = purchase(p.inventory, p.money, cart);
+      if (cart.some((n) => n > 0)) bought.set(p.index, cart);
+    }
+    return bought;
   }
 
   /** Players by score (then wins), best first. */
