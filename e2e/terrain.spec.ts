@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test';
 const PROBE = { x: 8 + 312, y: 72 + 300 };
 
 test('clicking the field carves terrain', async ({ page }) => {
-  await page.goto('/?seed=1991');
+  await page.goto('/?lab&seed=1991');
   const canvas = page.locator('canvas.game-canvas');
   await expect(canvas).toBeVisible();
 

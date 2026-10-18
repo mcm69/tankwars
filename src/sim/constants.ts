@@ -4,3 +4,21 @@
  */
 export const FIELD_WIDTH = 624;
 export const FIELD_HEIGHT = 320;
+
+// Physics, in logical pixels and sim ticks (60/s). Tuned so a 45° shot at ~700 power crosses
+// the field in about 2.5 s, and full power reaches roughly twice the field width.
+export const GRAVITY = 0.05;
+export const POWER_TO_SPEED = 0.008;
+/** Horizontal acceleration per unit of wind. Wind 100 shifts a cross-field shot by ~1/4 field. */
+export const WIND_ACCEL = 0.00012;
+/** Safety cap on flight time; a shot in the air longer than this is discarded. */
+export const MAX_FLIGHT_TICKS = 60 * 30;
+
+export const MAX_HEALTH = 100;
+/** Power is capped at health × this (full health = 1000). */
+export const POWER_PER_HEALTH = 10;
+
+/** Ticks a fireball takes to play out. Terrain and damage resolve on impact. */
+export const EXPLOSION_TICKS = 28;
+/** Fall speed cap for unsupported tanks, pixels per tick. */
+export const TANK_FALL_SPEED = 4;

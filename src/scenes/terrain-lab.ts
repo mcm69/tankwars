@@ -56,7 +56,7 @@ export class TerrainLab {
     else if (p?.mode === 'fill') this.terrain.fillCircle(p.x, p.y, this.brush);
   }
 
-  render(): void {
+  render(_alpha?: number): void {
     const { ctx } = this.screen;
     const { hud, field } = LAYOUT;
     this.renderer.update(this.terrain);
