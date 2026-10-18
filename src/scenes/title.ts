@@ -59,6 +59,7 @@ export class TitleScene implements Scene {
   update(): void {
     for (const e of this.input.poll()) {
       if (e.type === 'key' || e.type === 'click') {
+        this.app.audio.ui('select');
         this.app.showMenu();
         return;
       }
@@ -74,6 +75,7 @@ export class TitleScene implements Scene {
       });
       if (r.kind === 'hitTerrain') {
         this.terrain.carveCircle(r.x, r.y, 14);
+        this.app.audio.roundEvent({ type: 'explode', x: r.x, y: r.y, radius: 14, harmless: false });
         this.booms.push({ x: r.x, y: r.y, r: 14, age: 0 });
         this.shell = null;
       } else if (r.kind !== 'flying') {
@@ -101,6 +103,7 @@ export class TitleScene implements Scene {
       age: 0,
     };
     this.booms.push({ x: tip.x, y: tip.y, r: 5, age: 10 }); // muzzle flash
+    this.app.audio.roundEvent({ type: 'fire', tankId: -1, weapon: 1 });
   }
 
   private barrelTip() {

@@ -17,6 +17,8 @@ export type RoundEvent =
   | { type: 'reaction'; x: number; y: number }
   | { type: 'sonic'; x: number; y: number }
   | { type: 'dirt'; x: number; y: number; radius: number }
+  /** Loose ground starts collapsing. */
+  | { type: 'crumble' }
   | { type: 'dud'; tankId: number }
   | { type: 'tankHit'; tankId: number; damage: number }
   | { type: 'shieldHit'; tankId: number; absorbed: number; kind: DamageKind }

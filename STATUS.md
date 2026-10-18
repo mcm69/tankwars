@@ -1,7 +1,7 @@
 # Status
 
-**Current stage:** Stage 8 — Computer opponents (complete, awaiting review)
-**Next:** Stage 9 — Audio
+**Current stage:** Stage 9 — Audio (complete, awaiting review)
+**Next:** Stage 10 — Touch & responsive layout
 **Last updated:** 2026-10-18
 
 See [PLAN.md](PLAN.md) for the full stage list. Update this file at the end of every work session
@@ -17,8 +17,8 @@ and at every stage boundary.
 - [x] 5 — Weapon system & full arsenal
 - [x] 6 — Game flow: title, menu, player setup, sets
 - [x] 7 — Economy, shop, guidance & shields
-- [x] 8 — Computer opponents (awaiting review)
-- [ ] 9 — Audio
+- [x] 8 — Computer opponents
+- [x] 9 — Audio (awaiting review)
 - [ ] 10 — Touch & responsive layout
 - [ ] 11 — Persistence
 - [ ] 12 — Visual polish & backgrounds
@@ -26,27 +26,14 @@ and at every stage boundary.
 
 ## Current stage progress
 
-Stage 8 is done: the six original computer opponents (plus one new one) play as the manual describes, buy equipment, and can be pitted against each other headlessly.
+Stage 9 is done: every game event has a synthesized sound, with no audio files.
 
-- **Thinking by probing** (`src/ai/probe.ts`): `probeShot` simulates a shot with the real physics on the current terrain without changing anything, optionally assuming a different wind or walls. AIs search over probes (bisection on power per elevation), so "exact physics" really is exact. `Round.shotLog` records every shot and its impact, which Lobber learns from.
-- **Personalities** (`src/ai/strategies.ts`):
-  - **Mr. Stupid**: random weapon, angle (any direction) and power.
-  - **Lobber**: two ranging shots at 75° with his cheapest weapon, then targets whoever is nearest his last impact and scales power by √(wanted range / last range). Rebound and strong wind confuse him.
-  - **Rifleman**: points straight at the nearest enemy above him at full power (and fast shells dud more), otherwise random. He uses a laser on any enemy in reach when he has the energy.
-  - **Windless Wit**: probe-perfect aim that assumes no wind.
-  - **Lob & Shoot**: Lobber without bouncing walls, Rifleman with them.
-  - **Twanger**: Rifleman without walls. With walls he grid-searches steep shots that bank off the ceiling onto the easiest kill (weakest, then nearest), and banks in 19/20 test setups.
-  - **Birdy Bonker** (new, the hidden name found in BOMB.EXE): probes with the real wind and walls, picks off the weakest, with a hair of error. Selectable, but not in "Random" (which picks from the original six).
-- **Weapon choice**: the strongest owned blast that won't catch the shooter (radius + 18 < distance). Lasers are priced by walking the beam line (air/dirt costs).
-- **Buying** (`src/ai/buy.ts`, `GameSet.computersShop`): when "Computers can buy" is on, each computer works through a per-personality priority list (shields and lasers for the smart ones, bigger bombs for the lobbers, random junk for Mr. Stupid), at most two bundles each, keeping ~15% back.
-- **In the game** (`battle.ts`): after a think pause the turret visibly swings and the power winds to the plan before firing. All-computer games run at 3× speed with instant aiming, and call a **stalemate mass kill** after 30 shots per player (the original left that to a human's Ctrl-M).
-- **Tournament harness**: `npm run sim -- [--ais a,b] [--games N] [--seed S] [--wind ...] [--walls ...] [--mode duel|ffa|both]` (via `tsx`; logic in `src/ai/tournament.ts`). It prints duel and free-for-all win rates plus a head-to-head matrix. A full run takes about 3 s.
-- `?play&cpu=N&ai=<id>` chooses the computers' personality (default random).
-- Tests: 152 unit tests (new: probe accuracy and purity; Windless hits in calm air and ignores wind; Rifleman's direct aim; Lobber ranges at 75° then homes in; Twanger banks; Lob & Shoot switches; every AI makes legal plans; weapon safety; laser pricing; shopping never overspends and has priorities; tournament runs and ranks Windless over Stupid) + 13 e2e tests; all pass. I watched mixed and all-computer sets play to Final Results headlessly.
-
-**Fixes from review (2026-10-18):** a click now continues from the "X wins" banner, like a key (the pointer sends a raw `click` event for every press, mirroring keys). A computer left as "Random" is now named after the personality it was assigned at set start (custom names are kept).
-
-**Tournament (20 games per pairing, standard wind, random walls, seed 1), duel win rates:** Birdy Bonker 95%, Windless Wit 48%, Lob & Shoot 48%, Lobber 46%, Twanger 40%, Rifleman 22%, Mr. Stupid 10%. With walls off: Lob & Shoot 62%, Lobber 54%, Windless 43%, Twanger/Rifleman 18%. With walls on: Twanger 55% (best of the originals), Windless 50%, Lobber 29%, Rifleman 27%, Lob & Shoot 24%. Windless Wit: 100% with no wind, 50% in high wind. This matches the manual's threat descriptions.
+- **Synth** (`src/audio/synth.ts`): WebAudio enveloped oscillators (square, sine, sawtooth, triangle) with pitch slides, looped white noise through a sweeping biquad filter, sustained voices for the fly sound, and a master gain. It unlocks on the first pointer or key press (browser autoplay rules) and is a silent no-op without WebAudio (tests).
+- **Effects** (`src/audio/sfx.ts`): recipes for fire, explosions (noise boom plus a sub thump that grows with radius), puff, laser zap, CRI Geiger crackle, sonic whine, dirt thud, crumble rumble (a new `crumble` sim event), dud clank, hit blip, shield chime, three death jingles (standard, fade, meltdown alarm), round-over fanfare (or a sad descent), turn chime (human turns only), and UI sounds (move, change, select, back, purchase "ka-ching", error buzz). The `roundEvent` switch is **exhaustive**, so a new sim event without a sound won't compile. Same-kind bursts are throttled (45–120 ms) so debris showers don't roar.
+- **Fly sound**: a triangle whistle that rises and falls with the shell's height. Off by default; Fly sound in the menu.
+- **Settings**: new **Volume** row (0–10, default 7) in the main menu. Sound effects on/off, Fly sound and the in-game **S** / SND button all take effect immediately, because `Sfx` reads settings on every call.
+- Sounds are wired into the battle, title (attract shots), menu, setup, shop and results.
+- Tests: 175 unit tests (new: every event type sounds, laser not doubled, bigger booms are longer and louder, silence when off or at volume 0, volume applied, throttling, UI sounds, fly voice start/follow/stop/mute) + 14 e2e tests (new: the AudioContext runs after a gesture, shots play, S mutes). **Not verified by ear:** how it actually sounds needs your playtest.
 
 ## Implementation notes
 
@@ -58,7 +45,7 @@ Stage 8 is done: the six original computer opponents (plus one new one) play as 
 - The theme choice uses its own RNG stream (`seed ^ 0x5eed`) so presentation never consumes sim randomness. In Stage 6 the theme becomes part of round setup.
 - `window.__tankwars` is a debug handle (`ticks`, `scene`, `phase`, `round`, `overlay`, `app`) used by e2e tests and the console. `/` opens the title; `?play` jumps into a set (see above); `?lab` opens the terrain lab.
 - **Menus are canvas-rendered** (PLAN §2.1 item 6 revised): the widget kit is in `src/ui/widgets.ts`, and `TextEntry` (an off-screen input) handles names. Keys typed before the field takes focus (same tick) are fed in by the scene.
-- Settings (`src/game/settings.ts`) = sim `GameOptions` + sound, fly sound, background, background speed, games per set, players, computers buy. They live in memory for now (persistence is Stage 11). Background, speed, sound and fly sound are stored but take effect in Stages 9 and 12.
+- Settings (`src/game/settings.ts`) = sim `GameOptions` + sound, volume, fly sound, background, background speed, games per set, players, computers buy. They live in memory for now (persistence is Stage 11). Background and background speed are stored but take effect in Stage 12.
 - Commands are queued by input and applied at the start of the next sim tick, so e2e tests must poll after key presses.
 - Physics constants (in `src/sim/constants.ts`): gravity 0.05 px/tick², speed = power × 0.008, wind accel = wind × 0.00012, max speed 40 px/tick per axis. Stage 13 tunes everything.
 - All weapon numbers live in `items.ts` (behaviors) and `weapons.ts`/`effects.ts` (laser, dud, death and CRI constants). They're first-pass values for Stage 13 to tune against the original.
@@ -79,10 +66,11 @@ Stage 8 is done: the six original computer opponents (plus one new one) play as 
 
 ## Playtest script for current stage
 
-1. Menu → setup → make player 2 a computer and pick a personality (←→), then start. Watch it think, swing the turret and fire. Try **Windless Wit** with Wind None (deadly) and with Wind Gale (harmless), **Twanger** with walls Yes (bank shots), and **Lobber** (ranging shots, then closing in).
-2. Shows: http://localhost:5173/?play&players=4&cpu=4&games=3 (random personalities; plays itself at 3×, and stalemates end in a mass kill), or force one with `&ai=twanger&walls=on`.
-3. Computers buy between games (see their strips next game; turn "Computers can buy" off in the menu to stop it).
-4. `npm run sim -- --games 20` prints the tournament tables. Try `--walls on`, `--wind none`, or `--ais lobber,twanger --mode duel`.
+1. `npm run dev`. Sound starts after your first key or click (browser rule). The title's attract shots are audible once you come back to it.
+2. Menu: moving and changing options blip. Set Volume (try 3 and 10) and turn Fly sound on.
+3. http://localhost:5173/?play&arsenal&players=3: fire each weapon and listen (incinerator vs nukes, laser zap, CRI crackle, sonic whine, dirt thud, crumble rumble). Get hit with and without a shield (chime vs blip) and kill tanks (death jingles, the meltdown alarm), then end the round (fanfare).
+4. Press **S** (or click SND) mid-game: silence, and S again brings it back. With Fly sound on, the shell whistles higher as it climbs.
+5. In the shop, adding items blips, being too poor buzzes, and Purchase goes "ka-ching".
 
 ## Known issues
 

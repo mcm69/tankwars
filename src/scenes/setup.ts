@@ -2,7 +2,7 @@ import { AI_BLURBS, AI_IDS, AI_NAMES, type AiId } from '../ai/registry';
 import type { App } from '../app';
 import type { Rect } from '../config';
 import { LOGICAL_WIDTH } from '../config';
-import { UiInput } from '../input/ui-input';
+import { UiInput, type UiEvent } from '../input/ui-input';
 import { drawText } from '../render/font';
 import { PLAYER_COLORS, tankSprite } from '../render/tank-sprite';
 import { MAX_NAME_LENGTH, type PlayerSlot } from '../game/settings';
@@ -75,6 +75,7 @@ export class SetupScene implements Scene {
   update(): void {
     this.ticks++;
     for (const e of this.input.poll()) {
+      if (!this.entry.active) this.uiSound(e);
       if (this.entry.active) {
         // Keys that beat the field's focus go into it; clicking elsewhere commits (via blur).
         if (e.type === 'key') this.entry.feed(e.key);
@@ -139,6 +140,19 @@ export class SetupScene implements Scene {
           if (inside(AI_RECT(i), e.x, e.y)) this.cycleAi(i, e.dir);
         }
       }
+    }
+  }
+
+  /** Clicks and key presses get a little blip; starting and leaving get their own. */
+  private uiSound(e: UiEvent): void {
+    const audio = this.app.audio;
+    if (e.type === 'key' && !e.repeat) {
+      if (e.code === 'KeyS') audio.ui('select');
+      else if (e.code === 'Escape') audio.ui('back');
+      else if (e.code === 'ArrowUp' || e.code === 'ArrowDown') audio.ui('move');
+      else if (/^(Arrow|Key[HKMC]|Enter|Space)/.test(e.code)) audio.ui('change');
+    } else if (e.type === 'click') {
+      audio.ui(inside(START_RECT, e.x, e.y) ? 'select' : 'change');
     }
   }
 

@@ -26,6 +26,8 @@ export const BACKGROUND_NAMES: Record<Background, string> = {
 export interface Settings extends GameOptions {
   sound: boolean;
   flySound: boolean;
+  /** Master volume, 0–10. */
+  volume: number;
   background: Background;
   /** Background animation speed, 0 = still, 10 = fastest (applies in Stage 12). */
   backgroundSpeed: number;
@@ -39,6 +41,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   ...DEFAULT_OPTIONS,
   sound: true,
   flySound: false,
+  volume: 7,
   background: 'random',
   backgroundSpeed: 8,
   gamesPerSet: 10,

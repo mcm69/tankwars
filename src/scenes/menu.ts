@@ -1,7 +1,7 @@
 import { AI_NAMES } from '../ai/registry';
 import type { App } from '../app';
 import { LOGICAL_WIDTH } from '../config';
-import { UiInput } from '../input/ui-input';
+import { UiInput, type UiEvent } from '../input/ui-input';
 import { drawText } from '../render/font';
 import { BACKGROUND_NAMES, BACKGROUNDS, MAX_PLAYERS, type Settings } from '../game/settings';
 import { WIND_LEVELS } from '../sim/options';
@@ -55,6 +55,13 @@ export class MenuScene implements Scene {
         value: () => onOff(s().sound),
         change: toggle('sound'),
         help: 'Turns all sound on or off (also S during play).',
+      },
+      {
+        id: 'volume',
+        label: 'Volume',
+        value: () => (s().volume === 0 ? 'Silent' : String(s().volume)),
+        change: (d) => (app.settings = { ...s(), volume: step(s().volume, d, 0, 10) }),
+        help: 'Master volume for all sound effects.',
       },
       {
         id: 'flySound',
@@ -166,10 +173,24 @@ export class MenuScene implements Scene {
 
   update(): void {
     for (const e of this.input.poll()) {
-      if (this.list.handle(e)) continue;
-      if (e.type === 'key' && e.code === 'Escape') this.app.showTitle();
+      const before = this.list.selected;
+      if (this.list.handle(e)) {
+        this.menuSound(e, before);
+        continue;
+      }
+      if (e.type === 'key' && e.code === 'Escape') {
+        this.app.audio.ui('back');
+        this.app.showTitle();
+      }
       if (e.type === 'key' && e.code === 'KeyS' && !e.repeat) this.app.showSetup();
     }
+  }
+
+  private menuSound(e: UiEvent, selectedBefore: number): void {
+    if (e.type === 'move') return;
+    const item = this.list.items[this.list.selected];
+    if (e.type === 'key' && this.list.selected !== selectedBefore) this.app.audio.ui('move');
+    else this.app.audio.ui(item?.activate ? 'select' : 'change');
   }
 
   render(): void {

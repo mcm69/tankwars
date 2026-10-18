@@ -1,3 +1,5 @@
+import { Sfx } from './audio/sfx';
+import { Synth } from './audio/synth';
 import { CHEAPEST_PRICE } from './game/economy';
 import { GameSet } from './game/set';
 import { DEFAULT_SETTINGS, defaultSlots, type PlayerSlot, type Settings } from './game/settings';
@@ -28,6 +30,8 @@ export class App {
   settings: Settings = { ...DEFAULT_SETTINGS };
   slots: PlayerSlot[] = defaultSlots();
   set: GameSet | null = null;
+  /** Sound effects; reads `settings` on every call. */
+  readonly audio = new Sfx(new Synth(), () => this.settings);
   private scene: Scene;
   private startInventory: number[] | undefined;
   private seedOverride: number | undefined;
@@ -50,6 +54,7 @@ export class App {
   }
 
   private goto(scene: Scene): void {
+    this.audio.stopAll();
     this.scene.dispose();
     this.scene = scene;
   }

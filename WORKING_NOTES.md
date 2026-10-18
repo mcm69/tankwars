@@ -90,6 +90,7 @@ Equipment strip order in game = weapon index 0–17, then H, V (20 boxes).
 - E2E: use `e2e/helpers.ts` (`pressUntilScene`, `continueToNext`, `finishGame`); they check state before pressing, because screens change mid-poll.
 - AI (Stage 8): plans come from probes (`src/ai/probe.ts`), using the real physics on the real terrain. "Birdy Bonker" (a string in BOMB.EXE) is implemented as a new expert AI, kept out of the Random pool. All-computer games: 3× speed and a stalemate mass kill at 30 shots per player.
 - `npm run sim` (tsx) runs the AI tournament; use it to sanity-check difficulty after any physics or weapon tuning.
+- Audio (Stage 9): synth-only WebAudio (`src/audio`). New sim events must get a case in `Sfx.roundEvent` (the switch is exhaustive). Audio unlocks on the first gesture; headless Chrome runs the AudioContext fine for e2e.
 - Crumble % = per-shot chance that _all_ loose ground collapses (column sand model), not per pixel.
 - Fall damage: (distance − 4 px) × 0.5. Initial drop-in is free.
 - Terrain surface band is 18–90% of field height from the top. Tanks will need headroom above the highest ground.

@@ -67,10 +67,16 @@ export class ShopScene implements Scene {
     const item = BUYABLE[k]!;
     this.selected = k;
     if (dir > 0) {
-      if (canAddToCart(item, this.cart, this.player.money)) this.cart[item]! += 1;
-      else this.say('Not enough money');
+      if (canAddToCart(item, this.cart, this.player.money)) {
+        this.cart[item]! += 1;
+        this.app.audio.ui('change');
+      } else {
+        this.say('Not enough money');
+        this.app.audio.ui('error');
+      }
     } else if (this.cart[item]! > 0) {
       this.cart[item]! -= 1;
+      this.app.audio.ui('back');
     }
   }
 
@@ -78,6 +84,7 @@ export class ShopScene implements Scene {
     if (cartCost(this.cart) === 0) return;
     this.player.money = purchase(this.player.inventory, this.player.money, this.cart);
     this.cart = emptyCart();
+    this.app.audio.ui('purchase');
     this.say('Purchased!');
   }
 

@@ -37,6 +37,7 @@ export class ResultsScene implements Scene {
       events.some((e) => (e.type === 'key' && !e.repeat) || e.type === 'click') ||
       (this.set.allComputers && !this.final && this.ticks > AUTO_ADVANCE_TICKS);
     if (!proceed) return;
+    this.app.audio.ui('select');
     if (this.final) this.app.showMenu();
     else this.app.afterStatus();
   }

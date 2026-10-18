@@ -124,6 +124,8 @@ export class BattleScene implements Scene {
       if (e.kind === 'ui') this.handleUi(e.action);
       else if (e.kind === 'command' && this.isHumanTurn()) this.round.command(e.cmd);
     }
+    const p = this.round.projectile;
+    this.app.audio.flying(p && !this.overlay ? this.round.terrain.height - p.y : null);
     if (this.overlay) return; // the sim is frozen while an overlay is open
 
     if (this.round.phase === 'roundOver') {
@@ -145,6 +147,10 @@ export class BattleScene implements Scene {
     const roundEvents = this.round.drainEvents();
     this.renderer.onEvents(this.round, roundEvents);
     for (const e of roundEvents) {
+      // Turn chimes only for humans; computer turns would chirp nonstop.
+      if (e.type !== 'turn' || this.set.players[e.tankId]?.kind === 'human') {
+        this.app.audio.roundEvent(e);
+      }
       if (e.type === 'fireRejected' && this.isHumanTurn()) {
         this.toast('Laser needs 100+ energy: raise power', '#ff9a6a');
       }

@@ -376,6 +376,7 @@ export class Round implements World {
       this.crumbler = new Crumbler(this.terrain);
       this.crumbleTicks = 0;
       this.phase = 'crumbling';
+      this.events.push({ type: 'crumble' });
     } else {
       this.phase = 'settling';
     }
