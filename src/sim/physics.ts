@@ -16,7 +16,25 @@ export interface Projectile {
   /** Tanks this shell already bored through as a dud (it ignores them from then on). */
   readonly passed: number[];
   age: number;
+  /** Guidance toward a target point, and which axis has locked on (if any). */
+  guidance?: Guidance;
 }
+
+/**
+ * Herb's (H) system locks the shell onto the target's column when it passes over it, so it
+ * drops straight down. Vick's (V) system locks onto the target's height when the descending
+ * shell reaches it, and flies level straight at the target. Neither helps if the shell never
+ * crosses that line, and either can steer a shell into a hill: easy to misuse.
+ */
+export interface Guidance {
+  readonly axis: 'H' | 'V';
+  readonly tx: number;
+  readonly ty: number;
+  locked: boolean;
+}
+
+/** Speed of a Vick's-guided shell flying level at its target. */
+const LEVEL_FLIGHT_SPEED = 3;
 
 export type StepResult =
   | { kind: 'flying' }
@@ -64,15 +82,25 @@ export function stepProjectile(p: Projectile, world: PhysicsWorld): StepResult {
   p.prevX = p.x;
   p.prevY = p.y;
   p.age++;
-  p.vx = clampSpeed(p.vx + windAccel);
-  p.vy = clampSpeed(p.vy + GRAVITY);
+  const g = p.guidance;
+  // A locked H shell falls straight down (no wind); a locked V shell flies level (no gravity).
+  if (g?.locked && g.axis === 'H') p.vx = 0;
+  else p.vx = clampSpeed(p.vx + windAccel);
+  if (g?.locked && g.axis === 'V') p.vy = 0;
+  else p.vy = clampSpeed(p.vy + GRAVITY);
 
   const steps = Math.max(1, Math.ceil(Math.hypot(p.vx, p.vy)));
   let sx = p.vx / steps;
   let sy = p.vy / steps;
   for (let i = 0; i < steps; i++) {
+    const lastX = p.x;
+    const lastY = p.y;
     p.x += sx;
     p.y += sy;
+    if (g && !g.locked && guide(p, g, lastX, lastY)) {
+      sx = p.vx / steps;
+      sy = p.vy / steps;
+    }
     if (walls) {
       if (p.x < 0 || p.x >= w) {
         p.x = p.x < 0 ? -p.x : 2 * (w - 1e-6) - p.x;
@@ -101,6 +129,22 @@ export function stepProjectile(p: Projectile, world: PhysicsWorld): StepResult {
     if (goneLeft || goneRight || p.x < -2 * w || p.x > 3 * w) return { kind: 'lost' };
   }
   return { kind: 'flying' };
+}
+
+/** Checks whether the shell just crossed its guidance line, and locks on if so. */
+function guide(p: Projectile, g: Guidance, lastX: number, lastY: number): boolean {
+  if (g.axis === 'H') {
+    if ((lastX - g.tx) * (p.x - g.tx) > 0) return false;
+    p.x = g.tx;
+    p.vx = 0;
+  } else {
+    if (!(p.vy > 0 && lastY < g.ty && p.y >= g.ty)) return false;
+    p.y = g.ty;
+    p.vy = 0;
+    p.vx = Math.sign(g.tx - p.x || 1) * Math.max(Math.abs(p.vx), LEVEL_FLIGHT_SPEED);
+  }
+  g.locked = true;
+  return true;
 }
 
 function clampSpeed(v: number): number {

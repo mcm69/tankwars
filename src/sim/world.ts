@@ -5,6 +5,9 @@ import type { Terrain } from './terrain';
 
 export type DeathStyle = 'standard' | 'dirt' | 'fade' | 'meltdown';
 
+/** Falls are soaked by the Inertia Dampener; everything else by the Energy Shield. */
+export type DamageKind = 'blast' | 'fall';
+
 export type RoundEvent =
   | { type: 'turn'; tankId: number }
   | { type: 'fire'; tankId: number; weapon: number }
@@ -16,6 +19,7 @@ export type RoundEvent =
   | { type: 'dirt'; x: number; y: number; radius: number }
   | { type: 'dud'; tankId: number }
   | { type: 'tankHit'; tankId: number; damage: number }
+  | { type: 'shieldHit'; tankId: number; absorbed: number; kind: DamageKind }
   | { type: 'tankDied'; tankId: number; style: DeathStyle }
   | { type: 'roundOver'; winnerId: number | null };
 
@@ -26,8 +30,8 @@ export interface World {
   readonly rng: Rng;
   readonly options: Readonly<GameOptions>;
   readonly walls: boolean;
-  /** Applies damage to a living tank and reports it. */
-  damage(tankId: number, amount: number): void;
+  /** Applies damage to a living tank (after its shields) and reports it. */
+  damage(tankId: number, amount: number, kind?: DamageKind): void;
   emit(e: RoundEvent): void;
   /** Set by the Sonic Blaster: loose ground collapses after this shot regardless of crumble %. */
   forceCrumble: boolean;

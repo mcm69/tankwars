@@ -147,7 +147,9 @@ function drawStrip(
     const r = slotRect(i);
     const count = t?.inventory[i] ?? 0;
     const owned = count > 0;
-    const armed = !!t && i === t.selected && i !== GUIDANCE_H && i !== GUIDANCE_V;
+    const isGuidance = i === GUIDANCE_H || i === GUIDANCE_V;
+    const armed =
+      !!t && (isGuidance ? t.guidance?.axis === (i === GUIDANCE_H ? 'H' : 'V') : i === t.selected);
     const hover = enabled && ui.hover === `slot:${i}`;
     ctx.fillStyle = armed ? '#4a1c2a' : owned ? '#2c2440' : '#151020';
     ctx.fillRect(r.x, r.y, r.w, r.h);

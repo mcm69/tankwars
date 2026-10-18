@@ -1,5 +1,6 @@
 import { resolveAi, type AiId } from '../ai/registry';
 import { Rng } from '../core/rng';
+import { roundIncome } from './economy';
 import { startingInventory } from '../sim/items';
 import { Round, type RoundStats } from '../sim/round';
 import { gameOptionsOf, type PlayerKind, type PlayerSlot, type Settings } from './settings';
@@ -14,6 +15,8 @@ export interface SetPlayer {
   /** Carried from round to round. */
   inventory: number[];
   score: number;
+  /** Dollars to spend in the shop. */
+  money: number;
   wins: number;
   kills: number;
 }
@@ -39,6 +42,8 @@ export class GameSet {
   round: Round | null = null;
   /** Score gained by each player in the last finished round. */
   lastRoundScores: number[] = [];
+  /** Money earned by each player in the last finished round. */
+  lastRoundIncome: number[] = [];
   lastWinner: number | null = null;
 
   constructor(
@@ -47,6 +52,8 @@ export class GameSet {
     seed: number,
     /** Overrides the starting inventory (dev arsenal, tests). */
     startInventory?: readonly number[],
+    /** Starting money (dev/tests; normally 0). */
+    startMoney = 0,
   ) {
     this.settings = { ...settings };
     this.seed = seed >>> 0;
@@ -60,6 +67,7 @@ export class GameSet {
       ai: slot.kind === 'computer' ? resolveAi(slot.ai, aiRng) : null,
       inventory: [...inventory],
       score: 0,
+      money: startMoney,
       wins: 0,
       kills: 0,
     }));
@@ -97,8 +105,10 @@ export class GameSet {
     if (round.phase !== 'roundOver') throw new Error('Round is not over');
     this.lastWinner = round.winnerId;
     this.lastRoundScores = round.stats.map((s, i) => roundScore(s, round.winnerId === i));
+    this.lastRoundIncome = this.lastRoundScores.map(roundIncome);
     this.players.forEach((p, i) => {
       p.score += this.lastRoundScores[i]!;
+      p.money += this.lastRoundIncome[i]!;
       p.kills += round.stats[i]!.kills;
       if (round.winnerId === i) p.wins++;
       p.inventory = [...round.tanks[i]!.inventory];

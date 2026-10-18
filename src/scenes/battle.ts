@@ -21,6 +21,7 @@ import { THEMES } from '../render/themes';
 import { TrailLayer } from '../render/trail-layer';
 import { GUIDANCE_H, GUIDANCE_V, ITEMS, LEAD_BALL } from '../sim/items';
 import type { Round } from '../sim/round';
+import { TANK_HALF_WIDTH, TANK_HEIGHT } from '../sim/tank';
 import type { Scene } from './scene';
 
 const TOAST_TICKS = 150;
@@ -167,6 +168,7 @@ export class BattleScene implements Scene {
   private handleOverlayInput(e: InputEvent): boolean {
     const o = this.overlay;
     if (!o) return false;
+    if (o.kind === 'target') return this.handleTargetInput(o, e);
     let answer: 'yes' | 'no' | 'dismiss' | null = null;
     if (e.kind === 'key') {
       if (o.kind === 'confirm') {
@@ -189,6 +191,43 @@ export class BattleScene implements Scene {
       this.app.abortSet();
     }
     return true;
+  }
+
+  /** Guidance target picker: ←→ cycle, Enter confirms, Esc cancels, or click a tank. */
+  private handleTargetInput(o: Extract<Overlay, { kind: 'target' }>, e: InputEvent): boolean {
+    const n = o.candidates.length;
+    const confirm = (targetId: number) => {
+      this.overlay = null;
+      if (this.round.command({ type: 'setGuidance', axis: o.axis, targetId })) {
+        const t = this.round.tanks[targetId]!;
+        this.toast(
+          `${o.axis === 'H' ? "Herb's" : "Vick's"} guidance locked on ${t.name}`,
+          '#ff9a6a',
+        );
+      }
+    };
+    if (e.kind === 'key') {
+      if (e.code === 'ArrowLeft') o.index = (o.index + n - 1) % n;
+      else if (e.code === 'ArrowRight') o.index = (o.index + 1) % n;
+      else if (e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter') {
+        confirm(o.candidates[o.index]!);
+      } else if (e.code === 'Escape') this.overlay = null;
+      else return false;
+      return true;
+    }
+    if (e.kind === 'overlayClick') {
+      const fx = e.x - LAYOUT.field.x;
+      const fy = e.y - LAYOUT.field.y;
+      const hit = o.candidates.find((id) => {
+        const t = this.round.tanks[id]!;
+        return (
+          Math.abs(t.x - fx) <= TANK_HALF_WIDTH + 4 && fy >= t.y - TANK_HEIGHT - 4 && fy <= t.y + 4
+        );
+      });
+      if (hit !== undefined) confirm(hit);
+      return hit !== undefined;
+    }
+    return false;
   }
 
   private handleUi(a: UiAction): void {
@@ -217,8 +256,24 @@ export class BattleScene implements Scene {
       case 'guidance': {
         const idx = a.axis === 'H' ? GUIDANCE_H : GUIDANCE_V;
         const t = this.round.current;
-        if (!t || !(t.inventory[idx]! > 0)) this.toast(`No ${ITEMS[idx]!.name}`, '#ff9a6a');
-        else this.toast('Guidance systems arrive in Stage 7', '#ff9a6a');
+        if (!t || this.round.phase !== 'aiming' || !this.isHumanTurn()) break;
+        if (!(t.inventory[idx]! > 0)) {
+          this.toast(`No ${ITEMS[idx]!.name}`, '#ff9a6a');
+        } else if (t.guidance?.axis === a.axis) {
+          this.round.command({ type: 'clearGuidance' });
+          this.toast(`${ITEMS[idx]!.short} off`, '#ff9a6a');
+        } else {
+          const candidates = this.round.order.filter(
+            (id) => id !== t.id && this.round.tanks[id]!.alive,
+          );
+          // Start on the nearest enemy.
+          let index = 0;
+          candidates.forEach((id, i) => {
+            const d = Math.abs(this.round.tanks[id]!.x - t.x);
+            if (d < Math.abs(this.round.tanks[candidates[index]!]!.x - t.x)) index = i;
+          });
+          if (candidates.length) this.overlay = { kind: 'target', axis: a.axis, candidates, index };
+        }
         break;
       }
     }
@@ -266,6 +321,7 @@ export class BattleScene implements Scene {
         roundNumber: this.set.roundsPlayed + 1,
         totalRounds: this.set.totalRounds,
         soundOn: this.app.settings.sound,
+        tickCount: this.round.tickCount,
       });
     }
 

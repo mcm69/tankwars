@@ -1,3 +1,4 @@
+import { CHEAPEST_PRICE } from './game/economy';
 import { GameSet } from './game/set';
 import { DEFAULT_SETTINGS, defaultSlots, type PlayerSlot, type Settings } from './game/settings';
 import type { DebugOverlay } from './render/debug-overlay';
@@ -7,6 +8,7 @@ import { MenuScene } from './scenes/menu';
 import { ResultsScene } from './scenes/results';
 import type { Scene } from './scenes/scene';
 import { SetupScene } from './scenes/setup';
+import { ShopScene } from './scenes/shop';
 import { TitleScene } from './scenes/title';
 
 /** Options for jumping straight into a set (dev/test URLs). */
@@ -15,6 +17,7 @@ export interface QuickStart {
   slots?: PlayerSlot[];
   seed?: number;
   inventory?: number[];
+  money?: number;
 }
 
 /**
@@ -28,6 +31,7 @@ export class App {
   private scene: Scene;
   private startInventory: number[] | undefined;
   private seedOverride: number | undefined;
+  private startMoney = 0;
 
   constructor(
     readonly container: HTMLElement,
@@ -66,7 +70,7 @@ export class App {
   /** Starts a new set with the current settings and slots. */
   startSet(): void {
     const seed = this.seedOverride ?? (Math.random() * 2 ** 32) >>> 0; // UI-level: picks the set
-    this.set = new GameSet(this.settings, this.slots, seed, this.startInventory);
+    this.set = new GameSet(this.settings, this.slots, seed, this.startInventory, this.startMoney);
     this.startRound();
   }
 
@@ -75,6 +79,22 @@ export class App {
     if (!set) return this.showMenu();
     if (set.finished) return this.goto(new ResultsScene(this, set, true));
     this.goto(new BattleScene(this, set, set.startRound()));
+  }
+
+  /**
+   * After the between-games status screen: every human who can afford something visits the
+   * shop in turn, then the next game starts.
+   */
+  afterStatus(): void {
+    const set = this.set;
+    if (!set) return this.showMenu();
+    const shoppers = set.players.filter((p) => p.kind === 'human' && p.money >= CHEAPEST_PRICE);
+    const next = (): void => {
+      const p = shoppers.shift();
+      if (p) this.goto(new ShopScene(this, p, next));
+      else this.startRound();
+    };
+    next();
   }
 
   /** Called by the battle scene once a round is over and acknowledged. */
@@ -95,6 +115,7 @@ export class App {
     if (q.slots) this.slots = q.slots;
     this.seedOverride = q.seed;
     this.startInventory = q.inventory;
+    this.startMoney = q.money ?? 0;
     this.startSet();
   }
 

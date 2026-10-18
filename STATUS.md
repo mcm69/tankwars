@@ -1,7 +1,7 @@
 # Status
 
-**Current stage:** Stage 6 — Game flow (complete, awaiting review)
-**Next:** Stage 7 — Economy, shop, guidance & shields
+**Current stage:** Stage 7 — Economy, shop, guidance & shields (complete, awaiting review)
+**Next:** Stage 8 — Computer opponents
 **Last updated:** 2026-10-18
 
 See [PLAN.md](PLAN.md) for the full stage list. Update this file at the end of every work session
@@ -15,8 +15,8 @@ and at every stage boundary.
 - [x] 3 — Environment rules
 - [x] 4 — HUD & full controls (desktop)
 - [x] 5 — Weapon system & full arsenal
-- [x] 6 — Game flow: title, menu, player setup, sets (awaiting review)
-- [ ] 7 — Economy, shop, guidance & shields
+- [x] 6 — Game flow: title, menu, player setup, sets
+- [x] 7 — Economy, shop, guidance & shields (awaiting review)
 - [ ] 8 — Computer opponents
 - [ ] 9 — Audio
 - [ ] 10 — Touch & responsive layout
@@ -26,19 +26,15 @@ and at every stage boundary.
 
 ## Current stage progress
 
-Stage 6 is done: the full loop runs from title to final results, played entirely through the UI.
+Stage 7 is done: money matters, and guidance and shields work.
 
-- **App and scenes** (`src/app.ts`, `src/scenes/*`): a scene router for title → menu → setup → battle ⇄ status → final → menu. Each scene disposes its listeners (input controllers use `AbortController`).
-- **Title** (`title.ts`): a two-tone 8× pixel logo over a sunset battlefield, with a big tank lobbing shells that crater the hills (attract animation). Any key or click continues.
-- **Main menu** (`menu.ts`): every option from the original (sound, fly sound, crumble, walls, wind, visible shot, shot trace, background, background speed, games per set 1–99, tanks fall, players 2–10, explosions kill, computers can buy) and Start. It works like the original: ↑↓ move the `*` cursor, ←→ change; you can also click ◀ ▶ or the value (right-click goes back), or use the wheel. Each row has a help line.
-- **Player setup** (`setup.ts`): per slot a color tank, an editable name, Human/CPU, and a personality picker (Random, Mr. Stupid, Lobber, Rifleman, Windless Wit, Lob & Shoot, Twanger) with the manual's threat blurb. Default names follow the type/AI. Keyboard (Enter name, H/C, ←→, S, Esc) and mouse both work.
-- **Sets** (`src/game/set.ts`): `GameSet` holds players, carried-over inventories (starting kit scaled by games per set), scores, wins and kills, and gives each round its own seed (new terrain, wind and theme each game). Round **stats** credit damage and kills to whoever's turn it is; mass kills credit nobody.
-- **Scoring (provisional)**: damage dealt − self-damage + 150 per kill + 300 for surviving the round. Stage 7 settles scoring and money.
-- **Status and final screens** (`results.ts`): standings with score (and per-game gain), wins and kills; the winner of the game or set. All-computer sets advance by themselves.
-- **Computer players** (`src/ai/registry.ts`): the AI registry, names and blurbs, plus a **stub** that plays every personality like Mr. Stupid (random aim and power) after a short think delay (faster when no humans play). Stage 8 replaces the stub with the real strategies. Humans can't send commands during a computer's turn; UI keys still work.
-- Quit (Q) now aborts the set back to the menu ("Game aborted"). The F2 dev options panel was removed (the menu replaces it).
-- `?play` skips straight into a set for dev and tests: `players=`, `cpu=` (last N are computers), `games=`, `seed=`, `arsenal`, and the option params.
-- Tests: 124 unit tests (new: GameSet slots/colors/random AI/inventory/rounds/carry-over/scoring/standings, round stat attribution) + 11 e2e tests (new: a full 2-game human-vs-computer set via the UI only, quit to menu, setup mouse controls). I checked the title, menu, setup and status screens with headless screenshots.
+- **Economy** (`src/game/economy.ts`): each game pays $500 base + $10 per point of round score (score itself is still damage − self-damage + 150/kill + 300/win). Money is shown on the status screen. Twenty items are for sale (all but Lead Balls and Grenades), at the original's prices and bundles. Cart and purchase logic is pure and tested.
+- **Shop** (`src/scenes/shop.ts`): after each status screen (not after the last game), every human who can afford the cheapest item ($3,000) shops in turn. Two columns of items, each with icon, bundle and price, what you already have, a −/+ quantity, and the original's red/dark affordability light. Unallocated and total money show at the top; Purchase buys and stays, Done buys and leaves, Esc leaves without buying the selection. Keys: arrows, +/−, P, D, Esc; mouse: −/+, row click (right-click removes), wheel. Input is ignored for 15 ticks on entry so a stray key can't buy anything. Computers don't shop yet (Stage 8).
+- **Shields** (`absorbWithShields` in `round.ts`): they're automatic while you have units. The Energy Shield soaks blasts, debris, lasers, reactions and duds at 5 units per point (1000 units ≈ 200 damage); the Inertia Dampener soaks fall damage one-for-one. A cyan bubble shows on shielded tanks and flashes on absorb, with "shield N" / "damper N" floaters. `World.damage` takes a `kind` (`blast` | `fall`).
+- **Guidance** (`physics.ts`): `setGuidance` / `clearGuidance` commands; firing spends one unit and disarms. **Herb's (H)** locks onto the target's column when the shell passes over it and drops straight down (wind no longer applies). **Vick's (V)** locks onto the target's height when the descending shell reaches it and flies level at the target (no gravity). Neither helps if the shell never crosses the line. Lasers ignore guidance.
+- **Target picker**: H/V (keys or strip slots) opens a picker that starts on the nearest enemy; ←→ cycle, Enter confirm, Esc cancel, or click a tank. Pressing H/V again disarms. The armed slot turns red and a crosshair marks the target.
+- `?money=N` gives starting money in `?play` sets; `?arsenal` now also includes guidance and shields.
+- Tests: 136 unit tests (new: income, buyable list, cart and budget, purchase bundles and refusals, set income; both shields standalone and in a round; H drops onto the column, V flies level into the target, guidance validation, spending and disarming) + 13 e2e tests (new: shop purchase carries into the next game; H picker arms and disarms). The e2e helpers (`e2e/helpers.ts`) are now race-free around screen transitions. I checked the shop, picker and shields with headless screenshots.
 
 ## Implementation notes
 
@@ -62,17 +58,20 @@ Stage 6 is done: the full loop runs from title to final results, played entirely
 - **Crumble interpretation:** crumble % is a _per-shot_ chance that all loose ground collapses, not a per-pixel or per-column chance. This matches the manual ("how often loose ground will fall") and gives the Sonic Blaster a clear job. Rolling always consumes RNG, so determinism holds.
 - Dirt falling onto a tank passes through it (tanks aren't in the material grid), so a tank can end up buried. Shots still hit it, because tanks are checked before terrain.
 - Settings are copied into the `GameSet` at set start; changing the menu affects only the next set.
+- Economy, shield and guidance numbers are first-pass (income $500 + $10/point, shield 5 units/damage, level flight at 3 px/tick). Stage 13 tunes them.
+- Screens that open on a key press (results, shop) ignore input for a short grace period, so a held or double-pressed key doesn't skip or buy.
 - The angle is clamped to 0–180; the original wrapped around instead. I clamped deliberately because it's less confusing.
 - The Vitest config lives in `vite.config.ts` (imported from `vitest/config`). Unit tests are in `tests/`, e2e tests in `e2e/`.
 - `.claude/launch.json` defines the `dev` preview server (port 5173). Playwright uses `vite preview` on 4173.
 
 ## Playtest script for current stage
 
-1. `npm run dev`, then open http://localhost:5173. On the title, watch the tank shell the hills, then press any key.
-2. In the main menu, change options with ↑↓/←→ or the mouse (try games per set 3, players 3), then choose Start (or press S).
-3. In setup, rename players (Enter or click the name), switch Human/CPU (click or H/C), pick personalities (←→ or click). The blurb explains each. Press Start.
-4. Play: computers take their turns after a short pause (all still random for now). After each game there's a status screen with scores, wins and kills; after the last one, Final Results; then back to the menu.
-5. Q then Y mid-game returns to the menu ("Game aborted"). For a quick all-computer show, try http://localhost:5173/?play&players=4&cpu=4&games=3.
+1. Play a normal set (menu → setup with two humans or human vs CPU, 5 games). After each game the status screen shows money. Humans with $3,000+ get the shop: add bundles with + or clicks, watch Unallocated drop, then Purchase or Done. Your purchases show up in the next game's strip.
+2. Quick shop test: http://localhost:5173/?play&games=3&money=50000. End the game (K, Y, fire), continue, and shop.
+3. Guidance and shields: http://localhost:5173/?play&arsenal&players=3&wind=none.
+   - Press H, pick a target with ←→, Enter. Fire high and long: the shell drops straight down onto the target's column.
+   - Press V, pick a target on a hill, and lob a shell that comes down at the target's height: it levels off and flies straight at it.
+   - Everyone has an Energy Shield (cyan bubble). Shots get soaked ("shield N") until it's spent, then hurt. Falls are soaked by the Inertia Dampener.
 
 ## Known issues
 
@@ -80,9 +79,8 @@ Stage 6 is done: the full loop runs from title to final results, played entirely
 - While the desktop app's browser pane is hidden, rAF stops entirely. That's a pane artifact, not a game bug. Use headless Playwright for visual checks (see WORKING_NOTES).
 - Column collapse can leave sheer vertical walls at the edges of a collapsed area. That's inherent to the column model and fits the original's look.
 - The dev FPS overlay covers the top-left of the HUD in dev builds (toggle with F3).
-- H/V guidance and shields show in the HUD but do nothing until Stage 7.
 - All computer personalities play randomly until Stage 8, so an all-computer game can take a while (use K to mass kill).
-- Scoring is provisional, and there's no money or shop yet (Stage 7).
+- Computers don't buy anything yet (Stage 8), even with "Computers can buy" on.
 - The Background and Background speed menu options are stored but not rendered until Stage 12; sound options wait for Stage 9.
 - A CRI 20/D on a full field burns about 30k pixels in roughly 2.3 s. It's fine on desktop; check phones in Stage 10/13.
 - Tanks buried by dirt can still fire, but their shells hit the dirt right away and hurt them, which is deliberate ("death by dirt").

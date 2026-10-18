@@ -38,7 +38,7 @@ export class ResultsScene implements Scene {
       (this.set.allComputers && !this.final && this.ticks > AUTO_ADVANCE_TICKS);
     if (!proceed) return;
     if (this.final) this.app.showMenu();
-    else this.app.startRound();
+    else this.app.afterStatus();
   }
 
   render(): void {
@@ -82,15 +82,17 @@ export class ResultsScene implements Scene {
     panel(ctx, r);
     const cols = {
       rank: r.x + 14,
-      name: r.x + 60,
-      score: r.x + 300,
-      gain: r.x + 340,
-      wins: r.x + 390,
-      kills: r.x + 440,
+      name: r.x + 50,
+      score: r.x + 250,
+      gain: r.x + 290,
+      money: r.x + 358,
+      wins: r.x + 400,
+      kills: r.x + 444,
     };
     drawText(ctx, '#', cols.rank, r.y + 10, UI.label);
     drawText(ctx, 'Player', cols.name, r.y + 10, UI.label);
     drawText(ctx, 'Score', cols.score, r.y + 10, UI.label, 1, 'right');
+    drawText(ctx, 'Money', cols.money, r.y + 10, UI.label, 1, 'right');
     drawText(ctx, 'Wins', cols.wins, r.y + 10, UI.label, 1, 'right');
     drawText(ctx, 'Kills', cols.kills, r.y + 10, UI.label, 1, 'right');
     standings.forEach((p, i) => {
@@ -112,6 +114,7 @@ export class ResultsScene implements Scene {
           'right',
         );
       }
+      drawText(ctx, `$${p.money}`, cols.money, y + 4, '#7dff9a', 1, 'right');
       drawText(ctx, String(p.wins), cols.wins, y + 4, UI.text, 1, 'right');
       drawText(ctx, String(p.kills), cols.kills, y + 4, UI.text, 1, 'right');
     });

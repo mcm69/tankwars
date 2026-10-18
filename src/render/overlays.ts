@@ -11,13 +11,16 @@ export type Overlay =
   | { kind: 'pause' }
   | { kind: 'help' }
   | { kind: 'status'; tankId: number }
-  | { kind: 'confirm'; what: 'massKill' | 'quit' };
+  | { kind: 'confirm'; what: 'massKill' | 'quit' }
+  /** Choosing a guidance target: candidate tank ids, left to right. */
+  | { kind: 'target'; axis: 'H' | 'V'; candidates: number[]; index: number };
 
 export interface OverlayContext {
   round: Round;
   roundNumber: number;
   totalRounds: number;
   soundOn: boolean;
+  tickCount: number;
 }
 
 export interface Toast {
@@ -102,7 +105,41 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, o: Overlay, c: Overla
       return drawStatus(ctx, c.round, o.tankId);
     case 'confirm':
       return drawConfirm(ctx, o.what);
+    case 'target':
+      return drawTargetPicker(ctx, c.round, o, c.tickCount);
   }
+}
+
+function drawTargetPicker(
+  ctx: CanvasRenderingContext2D,
+  round: Round,
+  o: Extract<Overlay, { kind: 'target' }>,
+  tickCount: number,
+): void {
+  const { field } = LAYOUT;
+  const name = o.axis === 'H' ? "Herb's guidance" : "Vick's guidance";
+  ctx.fillStyle = 'rgb(0 0 0 / 60%)';
+  ctx.fillRect(field.x, field.y, field.w, 22);
+  drawText(
+    ctx,
+    `${name}: choose a target   ←→ cycle   Enter confirm   Esc cancel`,
+    field.x + field.w / 2,
+    field.y + 8,
+    '#ffffff',
+    1,
+    'center',
+  );
+  const t = round.tanks[o.candidates[o.index]!];
+  if (!t) return;
+  const x = Math.round(field.x + t.x);
+  const y = Math.round(field.y + t.y - 4);
+  const r = 12 + (Math.floor(tickCount / 8) % 2) * 2;
+  ctx.fillStyle = '#ff3a3a';
+  ctx.fillRect(x - r, y, 6, 1);
+  ctx.fillRect(x + r - 5, y, 6, 1);
+  ctx.fillRect(x, y - r, 1, 6);
+  ctx.fillRect(x, y + r - 5, 1, 6);
+  drawTextShadow(ctx, t.name, x, y - r - 12, PLAYER_COLORS[t.color]!, 1, 'center');
 }
 
 function drawPause(

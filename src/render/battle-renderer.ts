@@ -1,11 +1,13 @@
 import { LAYOUT } from '../config';
-import type { Round, RoundEvent } from '../sim/round';
+import { itemIndex } from '../sim/items';
+import { SHIELD_COST_PER_DAMAGE, type Round, type RoundEvent } from '../sim/round';
 import { BARREL_LENGTH, TANK_HALF_WIDTH, TURRET_PIVOT } from '../sim/tank';
 import { drawText, drawTextShadow } from './font';
 import { drawPixelLine, fillPixelCircle, strokePixelCircle } from './pixels';
 import { lighten, PLAYER_COLORS, SPRITE_HEIGHT, tankSprite } from './tank-sprite';
 
 const FIRE_COLORS = ['#ffffff', '#fff27a', '#ffc23a', '#ff7a1a', '#e0321e', '#9a1a14'];
+const SHIELD_ENERGY = itemIndex('shieldEnergy');
 const PUFF_COLORS = ['#ffffff', '#d8d8e0', '#a8a8b8', '#787888'];
 const CRI_COLORS = ['#ffffff', '#d4ff6a', '#6aff8a'];
 /** Explosions this big get a flash and shockwave ring. */
@@ -25,10 +27,23 @@ interface Floater {
  */
 export class BattleRenderer {
   private floaters: Floater[] = [];
+  /** Ticks left of a shield flash, per tank. */
+  private readonly flashes = new Map<number, number>();
 
   /** Feed sim events to spawn presentation-only effects. */
   onEvents(round: Round, events: readonly RoundEvent[]): void {
     for (const e of events) {
+      if (e.type === 'shieldHit') {
+        const t = round.tanks[e.tankId]!;
+        this.flashes.set(t.id, 12);
+        this.floaters.push({
+          x: t.x,
+          y: t.y - 30,
+          text: `${e.kind === 'fall' ? 'damper' : 'shield'} ${e.absorbed}`,
+          color: '#3fe6e6',
+          age: 0,
+        });
+      }
       if (e.type === 'dud') {
         const t = round.tanks[e.tankId]!;
         this.floaters.push({ x: t.x, y: t.y - 30, text: 'DUD!', color: '#ffffff', age: 0 });
@@ -56,7 +71,15 @@ export class BattleRenderer {
   ): void {
     const fx = round.effects;
     for (const t of round.tanks) {
-      if (t.alive) this.drawTank(ctx, t);
+      if (!t.alive) continue;
+      this.drawTank(ctx, t);
+      // Energy shield bubble, brighter while it's soaking a hit.
+      if ((t.inventory[SHIELD_ENERGY] ?? 0) >= SHIELD_COST_PER_DAMAGE) {
+        const flash = this.flashes.get(t.id) ?? 0;
+        ctx.fillStyle =
+          flash > 0 ? `rgb(160 255 255 / ${0.4 + flash / 20})` : 'rgb(63 230 230 / 35%)';
+        strokePixelCircle(ctx, t.x, t.y - 4, 11);
+      }
     }
     // Tanks in their death throes: fading out, or pulsing toward meltdown.
     for (const d of fx.dying) {
@@ -88,6 +111,21 @@ export class BattleRenderer {
       ctx.fillRect(mx - 2, my + 1, 5, 1);
       ctx.fillRect(mx - 1, my + 2, 3, 1);
       ctx.fillRect(mx, my + 3, 1, 1);
+
+      if (cur.guidance) {
+        // Crosshair on the guidance target, in the shooter's color.
+        const tg = round.tanks[cur.guidance.targetId];
+        if (tg?.alive) {
+          const x = Math.round(tg.x);
+          const y = Math.round(tg.y - 4);
+          ctx.fillStyle = PLAYER_COLORS[cur.color]!;
+          ctx.fillRect(x - 12, y, 5, 1);
+          ctx.fillRect(x + 8, y, 5, 1);
+          ctx.fillRect(x, y - 12, 1, 5);
+          ctx.fillRect(x, y + 8, 1, 5);
+          drawText(ctx, cur.guidance.axis, x + 10, y - 14, PLAYER_COLORS[cur.color]!);
+        }
+      }
 
       if (aimPreview) {
         // Dotted guide from the turret along the aim, length proportional to power.
@@ -246,6 +284,10 @@ export class BattleRenderer {
 
   /** Advances presentation-only animations; call once per sim tick. */
   tick(): void {
+    for (const [id, n] of this.flashes) {
+      if (n <= 1) this.flashes.delete(id);
+      else this.flashes.set(id, n - 1);
+    }
     for (const f of this.floaters) f.age++;
     this.floaters = this.floaters.filter((f) => f.age < 60);
   }

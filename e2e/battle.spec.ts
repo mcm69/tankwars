@@ -44,9 +44,10 @@ test('a full round via the keyboard: aim, power, fire, round over, new round', a
       return scene();
     })
     .toBe('status');
+  // Players who can afford something visit the shop; leave it (Esc) until the next game.
   await expect
     .poll(async () => {
-      await page.keyboard.press('Enter');
+      await page.keyboard.press((await scene()) === 'shop' ? 'Escape' : 'Enter');
       return scene();
     })
     .toBe('battle');

@@ -28,6 +28,8 @@ export interface Tank {
   inventory: number[];
   /** Index of the armed weapon (always a weapon index). */
   selected: number;
+  /** Guidance armed for the next shot, if any. */
+  guidance: { axis: 'H' | 'V'; targetId: number } | null;
 }
 
 export function createTank(
@@ -53,6 +55,7 @@ export function createTank(
     alive: true,
     inventory: inv,
     selected: preferred,
+    guidance: null,
   };
   if (inv[preferred]! <= 0) tank.selected = nextOwnedWeapon(tank, preferred, 1);
   return tank;

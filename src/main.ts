@@ -50,7 +50,7 @@ if (params.has('lab')) {
   app = a;
   if (params.has('play')) {
     // ?play skips the title and menus: ?players=N, ?cpu=N (last N players are computers),
-    // ?games=N, ?seed=N, ?arsenal, plus option params like ?wind=none&walls=on&crumble=100.
+    // ?games=N, ?seed=N, ?arsenal, ?money=N, plus option params like ?wind=none&walls=on&crumble=100.
     const players = Math.min(10, Math.max(2, Number(params.get('players')) || 2));
     const cpu = Math.min(players, Math.max(0, Number(params.get('cpu')) || 0));
     const slots: PlayerSlot[] = defaultSlots().map((s, i) => ({
@@ -67,6 +67,7 @@ if (params.has('lab')) {
       slots,
       ...(seed !== undefined ? { seed } : {}),
       ...(params.has('arsenal') ? { inventory: devArsenal() } : {}),
+      ...(params.has('money') ? { money: Number(params.get('money')) || 0 } : {}),
     });
   }
   update = () => a.update();
@@ -112,9 +113,13 @@ new GameLoop(TICK_RATE, {
   },
 }).start();
 
-/** ?arsenal: plenty of every weapon (and laser energy) for trying them out. */
+/** ?arsenal: plenty of every weapon, laser energy, guidance and shields for trying them out. */
 function devArsenal(): number[] {
   const inv = fullInventory(20);
   inv[itemIndex('laser')] = 5000;
+  inv[itemIndex('guidanceH')] = 5;
+  inv[itemIndex('guidanceV')] = 5;
+  inv[itemIndex('shieldEnergy')] = 1000;
+  inv[itemIndex('shieldInertia')] = 100;
   return inv;
 }

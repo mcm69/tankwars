@@ -85,6 +85,9 @@ Equipment strip order in game = weapon index 0–17, then H, V (20 boxes).
 - Menus are canvas-drawn too (not DOM). Name entry uses an off-screen `<input>`, and keys that arrive before it's focused are fed to it via `TextEntry.feed`.
 - Scoring is provisional (Stage 6): damage dealt − self-damage + 150/kill + 300/win. All damage during a turn is credited to that turn's shooter.
 - The original's player types K (keyboard) and M (mouse) are merged into "Human", since every human can use every device.
+- Economy (Stage 7): income = $500 + $10 × max(0, round score). Shields are passive while you have units: the Energy Shield costs 5 units per damage point (1000 ≈ 200 damage), the Inertia Dampener 1 unit per fall-damage point.
+- Guidance interpretation: H = lock onto the target's x when crossing it, then fall straight down; V = lock onto the target's y when descending through it, then fly level at the target. Both are "easy to misuse" by design.
+- E2E: use `e2e/helpers.ts` (`pressUntilScene`, `continueToNext`, `finishGame`); they check state before pressing, because screens change mid-poll.
 - Crumble % = per-shot chance that _all_ loose ground collapses (column sand model), not per pixel.
 - Fall damage: (distance − 4 px) × 0.5. Initial drop-in is free.
 - Terrain surface band is 18–90% of field height from the top. Tanks will need headroom above the highest ground.

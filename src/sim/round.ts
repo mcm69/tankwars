@@ -18,8 +18,8 @@ import {
   type WindLevel,
 } from './options';
 import { launch, stepProjectile, type Projectile } from './physics';
-import { LEAD_BALL, WEAPON_COUNT } from './items';
-import { createTank, isSupported, maxPower, nextOwnedWeapon, type Tank } from './tank';
+import { GUIDANCE_H, GUIDANCE_V, itemIndex, LEAD_BALL, WEAPON_COUNT } from './items';
+import { createTank, isSupported, maxPower, nextOwnedWeapon, tankCenter, type Tank } from './tank';
 import { Material, type Terrain } from './terrain';
 import { generateTerrain, type TerrainStyle } from './terrain-gen';
 import {
@@ -31,7 +31,7 @@ import {
   fireLaser,
   LASER_MIN_ENERGY,
 } from './weapons';
-import type { DeathStyle, RoundEvent, World } from './world';
+import type { DamageKind, DeathStyle, RoundEvent, World } from './world';
 
 export type { DeathStyle, RoundEvent } from './world';
 
@@ -69,6 +69,9 @@ export type Command =
   | { type: 'fire' }
   | { type: 'selectWeapon'; index: number }
   | { type: 'cycleWeapon'; dir: 1 | -1 }
+  /** Arms a guidance system the tank owns at a target, for the next shot. */
+  | { type: 'setGuidance'; axis: 'H' | 'V'; targetId: number }
+  | { type: 'clearGuidance' }
   /** Everyone dies once the current turn is over (the original's Ctrl-M). */
   | { type: 'massKill' };
 
@@ -171,9 +174,13 @@ export class Round implements World {
     this.events.push(e);
   }
 
-  damage(tankId: number, amount: number): void {
+  damage(tankId: number, amount: number, kind: DamageKind = 'blast'): void {
     const t = this.tanks[tankId];
     if (!t?.alive || amount <= 0) return;
+    amount = absorbWithShields(t, amount, kind, (absorbed) =>
+      this.events.push({ type: 'shieldHit', tankId, absorbed, kind }),
+    );
+    if (amount <= 0) return;
     const dealt = Math.min(t.health, amount);
     t.health -= dealt;
     const src = this.currentId;
@@ -222,6 +229,16 @@ export class Round implements World {
       case 'cycleWeapon':
         t.selected = nextOwnedWeapon(t, t.selected, cmd.dir);
         break;
+      case 'setGuidance': {
+        const item = cmd.axis === 'H' ? GUIDANCE_H : GUIDANCE_V;
+        const target = this.tanks[cmd.targetId];
+        if (!(t.inventory[item]! > 0) || !target?.alive || target.id === t.id) return false;
+        t.guidance = { axis: cmd.axis, targetId: cmd.targetId };
+        break;
+      }
+      case 'clearGuidance':
+        t.guidance = null;
+        break;
       case 'fire':
         return this.fire(t);
     }
@@ -253,6 +270,16 @@ export class Round implements World {
     t.inventory[weapon] = Math.max(0, t.inventory[weapon]! - 1);
     this.reselectIfEmpty(t);
     this.projectile = launch(t, weapon);
+    const g = t.guidance;
+    const target = g ? this.tanks[g.targetId] : undefined;
+    if (g && target?.alive) {
+      // One guidance unit per guided shot, aimed at where the target is now.
+      const item = g.axis === 'H' ? GUIDANCE_H : GUIDANCE_V;
+      t.inventory[item] = t.inventory[item]! - 1;
+      const c = tankCenter(target);
+      this.projectile.guidance = { axis: g.axis, tx: c.x, ty: c.y, locked: false };
+    }
+    t.guidance = null;
     this.phase = 'flying';
     this.events.push({ type: 'fire', tankId: t.id, weapon });
     return true;
@@ -429,7 +456,7 @@ export class Round implements World {
     this.fallSpeed.delete(t.id);
     this.fallStart.delete(t.id);
     if (start === undefined || initialDrop) return;
-    this.damage(t.id, fallDamage(t.y - start));
+    this.damage(t.id, fallDamage(t.y - start), 'fall');
   }
 
   /** Picks spread-out x positions in random player order and flattens a pad under each. */
@@ -462,6 +489,32 @@ export class Round implements World {
       }
     }
   }
+}
+
+const SHIELD_ENERGY = itemIndex('shieldEnergy');
+const SHIELD_INERTIA = itemIndex('shieldInertia');
+/** Energy Shield units spent per point of damage absorbed (1000 units soak 200 damage). */
+export const SHIELD_COST_PER_DAMAGE = 5;
+
+/**
+ * Lets a tank's shields soak damage, spending their units. The Energy Shield takes blasts,
+ * debris, lasers and reactions; the Inertia Dampener takes falls (one unit per point).
+ * Returns the damage that gets through.
+ */
+export function absorbWithShields(
+  t: Tank,
+  amount: number,
+  kind: DamageKind,
+  onAbsorb: (absorbed: number) => void = () => {},
+): number {
+  const item = kind === 'fall' ? SHIELD_INERTIA : SHIELD_ENERGY;
+  const cost = kind === 'fall' ? 1 : SHIELD_COST_PER_DAMAGE;
+  const units = t.inventory[item] ?? 0;
+  const absorbed = Math.min(amount, Math.floor(units / cost));
+  if (absorbed <= 0) return amount;
+  t.inventory[item] = units - absorbed * cost;
+  onAbsorb(absorbed);
+  return amount - absorbed;
 }
 
 export function fallDamage(distance: number): number {

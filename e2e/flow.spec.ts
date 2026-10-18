@@ -1,36 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-
-const scene = (page: Page) => page.evaluate(() => window.__tankwars?.scene);
-const phase = (page: Page) => page.evaluate(() => window.__tankwars?.phase);
-
-/** Presses a key until the scene changes to `target` (screens ignore keys for a moment). */
-async function pressUntilScene(page: Page, key: string, target: string) {
-  await expect
-    .poll(
-      async () => {
-        await page.keyboard.press(key);
-        return scene(page);
-      },
-      { timeout: 15_000 },
-    )
-    .toBe(target);
-}
-
-/** Ends the current game through the UI: mass kill (K, Y), then fire until it's over. */
-async function finishGame(page: Page) {
-  await expect.poll(() => phase(page), { timeout: 15_000 }).toMatch(/aiming|roundOver/);
-  await page.keyboard.press('KeyK');
-  await page.keyboard.press('KeyY');
-  await expect
-    .poll(
-      async () => {
-        await page.keyboard.press('Space'); // the human fires; the computer fires by itself
-        return phase(page);
-      },
-      { timeout: 30_000 },
-    )
-    .toBe('roundOver');
-}
+import { expect, test } from '@playwright/test';
+import { continueToNext, finishGame, phase, pressUntilScene, scene } from './helpers';
 
 test('a two-game set, human vs computer, from title to final results via the UI', async ({
   page,
@@ -64,10 +33,9 @@ test('a two-game set, human vs computer, from title to final results via the UI'
   expect(names[0]).toBe('Tester');
 
   await finishGame(page);
-  await pressUntilScene(page, 'Enter', 'status');
-  await pressUntilScene(page, 'Enter', 'battle');
+  await continueToNext(page, 'battle');
   await finishGame(page);
-  await pressUntilScene(page, 'Enter', 'final');
+  await continueToNext(page, 'final');
   await pressUntilScene(page, 'Enter', 'menu');
   expect(errors).toEqual([]);
 });
