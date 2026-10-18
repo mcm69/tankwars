@@ -74,6 +74,12 @@ Equipment strip order in game = weapon index 0–17, then H, V (20 boxes).
 - Node v26 (`/opt/homebrew/bin/node`), npm; python3; `dosbox-staging` at `/opt/homebrew/bin/dosbox-staging`.
 - No disassembler installed (not needed: the agreed approach is no disassembly).
 
+## Remake decisions
+
+- Layout (Stage 1): 640×400 logical canvas, HUD band 0–64, field 624×320 at (8,72). The original's
+  field was about 300×146 of 320×200, so ours is about 2× and a bit taller for 16:9 screens.
+- Terrain surface band is 18–90% of field height from the top. Tanks will need headroom above the highest ground.
+
 ## Gotchas
 
 _Add as discovered._

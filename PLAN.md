@@ -288,5 +288,5 @@ New weapons and AIs beyond the original set, replays/share-seed, online play (th
 2. Exact meaning of "Men" vs health and the power cap (the manual says power ≤ 100×MEN, but the screenshot shows Men: 99) → observe in DOSBox.
 3. Scoring/money formula → observe.
 4. Exact semantics of the shields and of Herb's vs Vick's guidance → observe.
-5. Final logical resolution and HUD placement on mobile (Stage 1 / Stage 10).
+5. Logical resolution: locked in Stage 1 at a 640×400 canvas with a 624×320 field. HUD placement on mobile is still open (Stage 10).
 6. What "Birdy Bonker" is (an unlisted AI?) → optional curiosity, not required.

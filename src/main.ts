@@ -3,7 +3,7 @@ import { LOGICAL_HEIGHT, LOGICAL_WIDTH, TICK_RATE } from './config';
 import { GameLoop } from './core/loop';
 import { DebugOverlay } from './render/debug-overlay';
 import { Screen } from './render/screen';
-import { TestPattern } from './render/test-pattern';
+import { TerrainLab } from './scenes/terrain-lab';
 
 declare global {
   interface Window {
@@ -17,7 +17,12 @@ if (!app) throw new Error('#app missing');
 
 const screen = new Screen(app, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 const debug = new DebugOverlay(app);
-const scene = new TestPattern(LOGICAL_WIDTH, LOGICAL_HEIGHT, 1991);
+const seedParam = Number(new URLSearchParams(location.search).get('seed'));
+const scene = new TerrainLab(
+  screen,
+  debug,
+  Number.isFinite(seedParam) && seedParam ? seedParam : 1991,
+);
 
 let ticks = 0;
 window.__tankwars = {
@@ -31,8 +36,8 @@ new GameLoop(TICK_RATE, {
     ticks++;
     scene.update();
   },
-  render(alpha) {
-    scene.render(screen.ctx, alpha);
+  render() {
+    scene.render();
     debug.set('ticks', ticks);
     debug.frame();
   },
