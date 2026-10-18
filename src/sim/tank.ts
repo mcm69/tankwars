@@ -1,4 +1,5 @@
 import { FIELD_WIDTH, MAX_HEALTH, POWER_PER_HEALTH } from './constants';
+import { itemIndex, ITEMS, startingInventory, WEAPON_COUNT } from './items';
 import type { Terrain } from './terrain';
 
 /** Tank footprint relative to its base point (x, y): the base row is just above the ground. */
@@ -23,10 +24,24 @@ export interface Tank {
   power: number;
   health: number;
   alive: boolean;
+  /** Count owned of each item, indexed like ITEMS. */
+  inventory: number[];
+  /** Index of the armed weapon (always a weapon index). */
+  selected: number;
 }
 
-export function createTank(id: number, name: string, color: number, x: number, y: number): Tank {
-  return {
+export function createTank(
+  id: number,
+  name: string,
+  color: number,
+  x: number,
+  y: number,
+  inventory: readonly number[] = startingInventory(),
+): Tank {
+  const inv = [...inventory];
+  while (inv.length < ITEMS.length) inv.push(0);
+  const preferred = itemIndex('incinerator');
+  const tank: Tank = {
     id,
     name,
     color,
@@ -36,7 +51,23 @@ export function createTank(id: number, name: string, color: number, x: number, y
     power: 400,
     health: MAX_HEALTH,
     alive: true,
+    inventory: inv,
+    selected: preferred,
   };
+  if (inv[preferred]! <= 0) tank.selected = nextOwnedWeapon(tank, preferred, 1);
+  return tank;
+}
+
+/**
+ * The next weapon after `from` in direction `dir` that the tank owns, wrapping around.
+ * Returns `from` if nothing else is owned.
+ */
+export function nextOwnedWeapon(t: Tank, from: number, dir: 1 | -1): number {
+  for (let i = 1; i <= WEAPON_COUNT; i++) {
+    const idx = (((from + dir * i) % WEAPON_COUNT) + WEAPON_COUNT) % WEAPON_COUNT;
+    if (t.inventory[idx]! > 0) return idx;
+  }
+  return from;
 }
 
 export function maxPower(t: Tank): number {

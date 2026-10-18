@@ -11,6 +11,8 @@ export interface Projectile {
   prevX: number;
   prevY: number;
   readonly ownerId: number;
+  /** Item index of the weapon in flight. */
+  readonly weapon: number;
   age: number;
 }
 
@@ -27,7 +29,7 @@ export interface PhysicsWorld {
   walls: boolean;
 }
 
-export function launch(tank: Tank): Projectile {
+export function launch(tank: Tank, weapon = tank.selected): Projectile {
   const a = (tank.angle * Math.PI) / 180;
   const speed = tank.power * POWER_TO_SPEED;
   const tip = barrelTip(tank);
@@ -39,6 +41,7 @@ export function launch(tank: Tank): Projectile {
     vx: Math.cos(a) * speed,
     vy: -Math.sin(a) * speed,
     ownerId: tank.id,
+    weapon,
     age: 0,
   };
 }

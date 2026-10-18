@@ -19,13 +19,16 @@ import {
   type WindLevel,
 } from './options';
 import { launch, stepProjectile, type Projectile } from './physics';
-import { createTank, isSupported, maxPower, tankCenter, type Tank } from './tank';
+import { ITEMS, LEAD_BALL, WEAPON_COUNT } from './items';
+import { createTank, isSupported, maxPower, nextOwnedWeapon, tankCenter, type Tank } from './tank';
 import { Material, type Terrain } from './terrain';
 import { generateTerrain, type TerrainStyle } from './terrain-gen';
 
 export interface PlayerSetup {
   name: string;
   color: number;
+  /** Items owned at the start of the round; defaults to the starting inventory. */
+  inventory?: readonly number[];
 }
 
 export interface RoundConfig {
@@ -39,8 +42,6 @@ export interface RoundConfig {
   walls?: boolean;
 }
 
-/** The only weapon until Stage 5: roughly an Incinerator. */
-export const SHELL = { radius: 20, damage: 150 } as const;
 /** A dying tank's final explosion, which can catch neighbors. */
 export const DEATH_BLAST = { radius: 22, damage: 80 } as const;
 
@@ -50,13 +51,19 @@ export type Phase =
 export type Command =
   | { type: 'aim'; delta: number }
   | { type: 'power'; delta: number }
+  | { type: 'setAim'; angle: number }
+  | { type: 'setPower'; power: number }
   | { type: 'flip' }
-  | { type: 'fire' };
+  | { type: 'fire' }
+  | { type: 'selectWeapon'; index: number }
+  | { type: 'cycleWeapon'; dir: 1 | -1 }
+  /** Everyone dies once the current turn is over (the original's Ctrl-M). */
+  | { type: 'massKill' };
 
 export type RoundEvent =
   | { type: 'turn'; tankId: number }
   | { type: 'fire'; tankId: number }
-  | { type: 'explode'; x: number; y: number; radius: number }
+  | { type: 'explode'; x: number; y: number; radius: number; harmless: boolean }
   | { type: 'tankHit'; tankId: number; damage: number }
   | { type: 'tankDied'; tankId: number }
   | { type: 'roundOver'; winnerId: number | null };
@@ -65,6 +72,8 @@ export interface Explosion {
   readonly x: number;
   readonly y: number;
   readonly radius: number;
+  /** A harmless puff (e.g. a Lead Ball landing): no crater, no damage. */
+  readonly harmless: boolean;
   age: number;
 }
 
@@ -93,6 +102,8 @@ export class Round {
   currentId = -1;
   winnerId: number | null = null;
   projectile: Projectile | null = null;
+  /** Set by the massKill command; everyone dies when the current turn resolves. */
+  massKillPending = false;
   readonly explosions: Explosion[] = [];
   tickCount = 0;
   private events: RoundEvent[] = [];
@@ -123,7 +134,7 @@ export class Round {
     const xs = this.placeTanks(config.players.length);
     this.tanks = config.players.map((p, i) => {
       // Start above the field at staggered heights; they drop in during the 'dropping' phase.
-      return createTank(i, p.name, p.color, xs[i]!, -this.rng.int(8, 80));
+      return createTank(i, p.name, p.color, xs[i]!, -this.rng.int(8, 80), p.inventory);
     });
     this.order = [...this.tanks].sort((a, b) => a.x - b.x).map((t) => t.id);
   }
@@ -140,6 +151,11 @@ export class Round {
 
   /** Applies a player command for the current tank. Returns false if it isn't allowed now. */
   command(cmd: Command): boolean {
+    if (cmd.type === 'massKill') {
+      if (this.phase === 'roundOver' || this.massKillPending) return false;
+      this.massKillPending = true;
+      return true;
+    }
     const t = this.current;
     if (this.phase !== 'aiming' || !t) return false;
     switch (cmd.type) {
@@ -149,16 +165,40 @@ export class Round {
       case 'power':
         t.power = clamp(t.power + cmd.delta, 0, maxPower(t));
         break;
+      case 'setAim':
+        t.angle = clamp(Math.round(cmd.angle), 0, 180);
+        break;
+      case 'setPower':
+        t.power = clamp(Math.round(cmd.power), 0, maxPower(t));
+        break;
       case 'flip':
         t.angle = 180 - t.angle;
         break;
+      case 'selectWeapon':
+        if (cmd.index < 0 || cmd.index >= WEAPON_COUNT || !(t.inventory[cmd.index]! > 0)) {
+          return false;
+        }
+        t.selected = cmd.index;
+        break;
+      case 'cycleWeapon':
+        t.selected = nextOwnedWeapon(t, t.selected, cmd.dir);
+        break;
       case 'fire':
-        this.projectile = launch(t);
-        this.phase = 'flying';
-        this.events.push({ type: 'fire', tankId: t.id });
+        this.fire(t);
         break;
     }
     return true;
+  }
+
+  private fire(t: Tank): void {
+    // An empty selection falls back to a Lead Ball; with nothing at all, it still fires one.
+    let weapon = t.selected;
+    if (!(t.inventory[weapon]! > 0)) weapon = LEAD_BALL;
+    t.inventory[weapon] = Math.max(0, t.inventory[weapon]! - 1);
+    if (t.inventory[t.selected]! <= 0) t.selected = nextOwnedWeapon(t, t.selected, 1);
+    this.projectile = launch(t, weapon);
+    this.phase = 'flying';
+    this.events.push({ type: 'fire', tankId: t.id });
   }
 
   tick(): void {
@@ -193,19 +233,42 @@ export class Round {
     const r = stepProjectile(p, this);
     if (r.kind === 'flying') return;
     this.projectile = null;
-    if (r.kind === 'lost') this.phase = 'settling';
-    else this.detonate({ x: r.x, y: r.y, ...SHELL });
+    if (r.kind === 'lost') {
+      this.phase = 'settling';
+      return;
+    }
+    // Temporary until Stage 5's weapon behaviors: every weapon is a plain blast.
+    const blast = ITEMS[p.weapon]!.blast ?? { radius: 0, damage: 0 };
+    this.detonate({ x: r.x, y: r.y, ...blast });
   }
 
   private detonate(blast: Blast): void {
+    if (blast.radius <= 0) {
+      this.explosions.push({ x: blast.x, y: blast.y, radius: 4, harmless: true, age: 0 });
+      this.events.push({ type: 'explode', x: blast.x, y: blast.y, radius: 4, harmless: true });
+      this.phase = 'exploding';
+      return;
+    }
     this.terrain.carveCircle(blast.x, blast.y, blast.radius);
     for (const [id, dmg] of blastDamage(blast, this.tanks)) {
       const t = this.tanks[id]!;
       t.health = Math.max(0, t.health - dmg);
       this.events.push({ type: 'tankHit', tankId: id, damage: dmg });
     }
-    this.explosions.push({ x: blast.x, y: blast.y, radius: blast.radius, age: 0 });
-    this.events.push({ type: 'explode', x: blast.x, y: blast.y, radius: blast.radius });
+    this.explosions.push({
+      x: blast.x,
+      y: blast.y,
+      radius: blast.radius,
+      harmless: false,
+      age: 0,
+    });
+    this.events.push({
+      type: 'explode',
+      x: blast.x,
+      y: blast.y,
+      radius: blast.radius,
+      harmless: false,
+    });
     this.phase = 'exploding';
   }
 
@@ -245,6 +308,11 @@ export class Round {
       this.events.push({ type: 'tankDied', tankId: doomed.id });
       this.detonate({ ...tankCenter(doomed), ...DEATH_BLAST });
       return;
+    }
+    if (this.massKillPending) {
+      this.massKillPending = false;
+      for (const t of this.tanks) if (t.alive) t.health = 0;
+      return; // the next settling tick resolves the deaths one by one
     }
     const alive = this.tanks.filter((t) => t.alive);
     if (alive.length <= 1) {

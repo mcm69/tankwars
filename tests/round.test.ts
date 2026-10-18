@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { itemIndex, startingInventory } from '../src/sim/items';
 import { Round, type Phase, type RoundEvent } from '../src/sim/round';
 import { isSupported } from '../src/sim/tank';
 
+/** Players stocked with plenty of Incinerators, so scripted rounds always have real ammo. */
 const players = (n: number) =>
-  Array.from({ length: n }, (_, i) => ({ name: `P${i + 1}`, color: i }));
+  Array.from({ length: n }, (_, i) => {
+    const inventory = startingInventory();
+    inventory[itemIndex('incinerator')] = 999;
+    return { name: `P${i + 1}`, color: i, inventory };
+  });
 
 function tickUntil(round: Round, done: () => boolean, limit = 20_000): RoundEvent[] {
   const events: RoundEvent[] = [];

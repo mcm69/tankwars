@@ -1,22 +1,22 @@
 import type { Command } from '../sim/round';
-
-/** Ticks a key must be held before it auto-repeats. */
-const HOLD_DELAY = 15;
+import { HOLD_DELAY, repeatStep, type InputEvent, type UiAction } from './events';
 
 interface Held {
   ticks: number;
 }
 
 /**
- * Turns keyboard state into per-tick sim commands. A tap is a single unit step; holding repeats
- * every tick after a short delay, accelerating for power. Holding Shift disables auto-repeat
- * (fine control, like the original's Alt).
+ * Turns keyboard state into per-tick input events. A tap is a single unit step; holding an
+ * arrow repeats every tick after a short delay, accelerating for power. Holding Shift disables
+ * auto-repeat (fine control, like the original's Alt).
  *
- * ←/→ tilt the barrel · ↑/↓ power ±1 · PgUp/PgDn power ±100 · I flip · Space/Enter fire
+ * Aim: ←/→ tilt · ↑/↓ power ±1 · PgUp/PgDn ±100 · I flip · Space/Enter fire
+ * Gear: Tab/Shift+Tab weapon · H/V guidance
+ * Game: 1–9,0 player status · Esc/P pause · F1/? help · S sound · K mass kill · Q quit
  */
 export class KeyboardController {
   private readonly held = new Map<string, Held>();
-  private readonly queue: Command[] = [];
+  private readonly queue: InputEvent[] = [];
   private shift = false;
 
   constructor(target: Window = window) {
@@ -28,28 +28,16 @@ export class KeyboardController {
     target.addEventListener('blur', () => this.held.clear());
   }
 
-  /** Commands for this tick: queued taps plus auto-repeat from held keys. */
-  poll(): Command[] {
+  /** Events for this tick: queued presses plus auto-repeat from held arrows. */
+  poll(): InputEvent[] {
     const out = this.queue.splice(0);
     if (this.shift) return out;
     for (const [code, h] of this.held) {
       h.ticks++;
       if (h.ticks < HOLD_DELAY) continue;
-      const accel = h.ticks > 90 ? 10 : h.ticks > 45 ? 4 : 1;
-      switch (code) {
-        case 'ArrowLeft':
-          out.push({ type: 'aim', delta: 1 });
-          break;
-        case 'ArrowRight':
-          out.push({ type: 'aim', delta: -1 });
-          break;
-        case 'ArrowUp':
-          out.push({ type: 'power', delta: accel });
-          break;
-        case 'ArrowDown':
-          out.push({ type: 'power', delta: -accel });
-          break;
-      }
+      const step = repeatStep(h.ticks);
+      const cmd = repeatCommand(code, step);
+      if (cmd) out.push({ kind: 'command', cmd });
     }
     return out;
   }
@@ -57,35 +45,86 @@ export class KeyboardController {
   private onKeyDown(e: KeyboardEvent): void {
     this.shift = e.shiftKey;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    const cmd = tapCommand(e.code);
-    if (!cmd) return;
-    e.preventDefault();
+    // Don't steal keys from form fields (e.g. the dev options panel).
+    if (
+      typeof HTMLElement !== 'undefined' &&
+      e.target instanceof HTMLElement &&
+      e.target.closest('input, select, textarea')
+    )
+      return;
+    const mapped = mapKey(e.code, e.key, e.shiftKey);
+    if (mapped || e.code === 'Tab' || e.code === 'F1') e.preventDefault();
     if (e.repeat) return; // we do our own repeat, tied to sim ticks
-    this.queue.push(cmd);
+    if (isAnswerKey(e.code)) this.queue.push({ kind: 'key', code: e.code });
+    if (!mapped) return;
+    this.queue.push(mapped);
     if (e.code.startsWith('Arrow')) this.held.set(e.code, { ticks: 0 });
   }
 }
 
-function tapCommand(code: string): Command | null {
+/** Keys that can answer or dismiss an overlay (modifiers and dev F-keys excluded). */
+function isAnswerKey(code: string): boolean {
+  if (/^(Shift|Control|Alt|Meta|CapsLock)/.test(code)) return false;
+  return !/^F([2-9]|1[0-2])$/.test(code);
+}
+
+function repeatCommand(code: string, step: number): Command | null {
   switch (code) {
     case 'ArrowLeft':
       return { type: 'aim', delta: 1 };
     case 'ArrowRight':
       return { type: 'aim', delta: -1 };
     case 'ArrowUp':
-      return { type: 'power', delta: 1 };
+      return { type: 'power', delta: step };
     case 'ArrowDown':
-      return { type: 'power', delta: -1 };
+      return { type: 'power', delta: -step };
+    default:
+      return null;
+  }
+}
+
+function mapKey(code: string, key: string, shift: boolean): InputEvent | null {
+  const cmd = (c: Command): InputEvent => ({ kind: 'command', cmd: c });
+  const ui = (a: UiAction): InputEvent => ({ kind: 'ui', action: a });
+  const digit = /^Digit(\d)$/.exec(code);
+  if (digit) {
+    const n = Number(digit[1]);
+    return ui({ type: 'status', tankId: n === 0 ? 9 : n - 1 });
+  }
+  if (key === '?') return ui({ type: 'help' });
+  switch (code) {
+    case 'ArrowLeft':
+    case 'ArrowRight':
+    case 'ArrowUp':
+    case 'ArrowDown':
+      return cmd(repeatCommand(code, 1)!);
     case 'PageUp':
-      return { type: 'power', delta: 100 };
+      return cmd({ type: 'power', delta: 100 });
     case 'PageDown':
-      return { type: 'power', delta: -100 };
+      return cmd({ type: 'power', delta: -100 });
     case 'KeyI':
-      return { type: 'flip' };
+      return cmd({ type: 'flip' });
     case 'Space':
     case 'Enter':
     case 'NumpadEnter':
-      return { type: 'fire' };
+      return cmd({ type: 'fire' });
+    case 'Tab':
+      return cmd({ type: 'cycleWeapon', dir: shift ? -1 : 1 });
+    case 'KeyH':
+      return ui({ type: 'guidance', axis: 'H' });
+    case 'KeyV':
+      return ui({ type: 'guidance', axis: 'V' });
+    case 'Escape':
+    case 'KeyP':
+      return ui({ type: 'pause' });
+    case 'F1':
+      return ui({ type: 'help' });
+    case 'KeyS':
+      return ui({ type: 'sound' });
+    case 'KeyK':
+      return ui({ type: 'massKill' });
+    case 'KeyQ':
+      return ui({ type: 'quit' });
     default:
       return null;
   }

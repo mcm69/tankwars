@@ -1,7 +1,7 @@
 # Status
 
-**Current stage:** Stage 3 — Environment rules (complete, awaiting review)
-**Next:** Stage 4 — HUD & full controls (desktop)
+**Current stage:** Stage 4 — HUD & full controls (complete, awaiting review)
+**Next:** Stage 5 — Weapon system & full arsenal
 **Last updated:** 2026-10-18
 
 See [PLAN.md](PLAN.md) for the full stage list. Update this file at the end of every work session
@@ -12,8 +12,8 @@ and at every stage boundary.
 - [x] 0 — Project scaffold
 - [x] 1 — Terrain & battlefield rendering
 - [x] 2 — Tanks, aiming, ballistics (first playable)
-- [x] 3 — Environment rules (awaiting review)
-- [ ] 4 — HUD & full controls (desktop)
+- [x] 3 — Environment rules
+- [x] 4 — HUD & full controls (desktop, awaiting review)
 - [ ] 5 — Weapon system & full arsenal
 - [ ] 6 — Game flow: title, menu, player setup, sets
 - [ ] 7 — Economy, shop, guidance & shields
@@ -26,15 +26,16 @@ and at every stage boundary.
 
 ## Current stage progress
 
-Stage 3 is done: every environmental option works and can be toggled from a dev panel (**F2**) or URL parameters.
+Stage 4 is done: the play screen is feature-complete for keyboard and mouse.
 
-- `src/sim/options.ts`: `GameOptions` (wind level, wall mode, crumble %, tanks fall, visible shot, shot trail), using the original's defaults. Wind profiles per level: none, low ≤30, standard mostly ≤100 with 6% gusts up to 800, high, and gale with gusts past 10,000. `random` picks a level, or a wall setting, per round.
-- Walls (`physics.ts`): **on** reflects off the sides and ceiling; **off** lets shots leave and come back, but drops a shot at once if it's off a side, moving away, with no wind to return it. Speed per axis is capped at 40 px/tick so gale shots stay cheap to simulate.
-- Crumbling (`src/sim/crumble.ts`): column "sand" collapse that moves every floating run of dirt down 1 px per pass, accelerating to 6 passes per tick and tracking active columns. After a shot's explosions finish, the round rolls `crumble%`; on success it enters a new `crumbling` phase, and tanks ride the collapsing ground down.
-- Falling tanks (`round.ts`): damage is (distance − 4) × 0.5 on landing. The initial drop never hurts. With "tanks fall" off, tanks hover.
-- Presentation: a persistent `TrailLayer` in a dimmed player color (cleared each round); the visible-shot option hides the shell and its **tracking markers** (edge arrows plus a distance bar when the shell is above or beside the field); a magenta **R** badge and brighter border when walls bounce; the wind level is shown under the wind.
-- `src/ui/dev-options.ts`: temporary F2 options panel (the real menu comes in Stage 6). `src/ui/options-params.ts`: URL params `wind=`, `walls=`, `crumble=`, `fall=`, `visible=`, `trail=`.
-- Tests: 66 unit tests (new: wind levels, walls on/off/return, crumble mechanics plus 0%/100% in a real round, fall damage on/off, URL params) + 4 e2e tests (new: F2 panel); all pass. I checked bounce + trail and crumble + fall visually with headless Playwright screenshots.
+- **Items and inventory** (`src/sim/items.ts`): the full catalog of 18 weapons, H/V guidance and 2 shields, in the original's strip order, with prices and bundles from BOMB.EXE. Tanks carry an `inventory` and an armed `selected` weapon, and start with the 2.5 rules (100 Lead Balls, 10 Grenades, 3 Incinerators). New sim commands: `selectWeapon`, `cycleWeapon`, `setAim`, `setPower`, `massKill`. Firing spends ammo and moves to the next owned weapon when one runs out; with nothing left it fires a Lead Ball. **Every weapon is still a plain blast with temporary radius/damage numbers** (Lead Ball is a harmless puff) until Stage 5.
+- **Bitmap font** (`src/render/font.ts`): an original 5×7 LCD-style font (ASCII plus arrows, ◀▶, …, ×, ±) rendered from cached per-color atlases at any integer scale, with drop shadows, plus 3×5 micro digits for counts. All canvas text now uses it; no browser fonts on the canvas.
+- **Icons** (`src/render/icons.ts`): procedural 10×10 pixel icons for all 22 items, plus dimmed "not owned" variants.
+- **HUD** (`hud.ts`, `hud-layout.ts`): Angle and Power with ◀ ▶ buttons, a direction arrow (click to flip), player name in color, Men, wind and level, the R badge, the armed weapon's name and count, a big FIRE button, and the equipment strip of 20 slots (dim = not owned, outlined = owned, red = armed, with counts), plus the shield indicator and help/pause/sound buttons. The layout is shared with the pointer hit-tester.
+- **Keyboard** (`input/keyboard.ts`): adds Tab/Shift+Tab (weapon), H/V (guidance; for now a toast), 1–9/0 (player status), Esc/P (pause), F1/? (help), S (sound), K (mass kill), Q (quit).
+- **Mouse** (`input/pointer.ts`, `input/aim.ts`): drag on the field to aim (direction from the turret, distance = power, dotted preview); click ◀ ▶ (hold repeats and accelerates); click "Power" for ±100; click a slot to arm; wheel for power (Shift ×10); click any tank for its status; FIRE button.
+- **Overlays** (`render/overlays.ts`): Game Status (pause), Controls (help), player status card (stats plus owned equipment), and Yes/No confirmations for mass kill and quit. Overlays freeze the sim. Toasts show feedback (sound, guidance, game aborted).
+- Tests: 89 unit tests (new: catalog/prices/icons, inventory and weapon commands, Lead Ball harmlessness, mass kill, HUD hit-test with no overlaps, aim math, font glyphs, keyboard mapping and repeat) + 8 e2e tests (new: HUD clicks, drag-aim, overlays freeze/close, mass-kill confirm); all pass. I checked the HUD and every overlay with headless screenshots.
 
 ## Implementation notes
 
@@ -44,10 +45,13 @@ Stage 3 is done: every environmental option works and can be toggled from a dev 
 - The RNG test pins the first 3 outputs for seed 1991. If the algorithm changes, saves and replays break, so bump the save version.
 - Terrain colors are not stored. They come from position (depth band + hash) at render time, so dirt added by weapons automatically matches.
 - The theme choice uses its own RNG stream (`seed ^ 0x5eed`) so presentation never consumes sim randomness. In Stage 6 the theme becomes part of round setup.
-- `window.__tankwars` is a debug handle (`ticks`, `phase`, `round`) used by e2e tests and the console. URL params: `?seed=N`, `?players=N`, `?lab`, plus the option params above.
+- `window.__tankwars` is a debug handle (`ticks`, `phase`, `round`, `overlay`) used by e2e tests and the console. URL params: `?seed=N`, `?players=N`, `?lab`, plus the option params above.
 - Commands are queued by input and applied at the start of the next sim tick, so e2e tests must poll after key presses.
 - Physics constants (in `src/sim/constants.ts`): gravity 0.05 px/tick², speed = power × 0.008, wind accel = wind × 0.00012, max speed 40 px/tick per axis. Stage 13 tunes everything.
-- Stage 2 has a single weapon, `SHELL` (radius 20, damage 150, roughly an Incinerator), and `DEATH_BLAST` (radius 22, damage 80). Both get replaced by the weapon registry in Stage 5.
+- Weapons temporarily use `ItemDef.blast` (radius/damage) in `items.ts`; Stage 5 replaces this with per-weapon behaviors. `DEATH_BLAST` (radius 22, damage 80) is in `round.ts`.
+- **Key bindings differ from the original's Ctrl combos** (Ctrl-P/S/Q/M collide with the browser's print, save, quit and so on). They are single keys: P/Esc pause, S sound, Q quit, K mass kill, and the original's Alt fine-step is now Shift.
+- Input events are processed in order within a tick. An overlay opened mid-tick receives the rest, and once it consumes one event the remainder of that tick is dropped (one Esc press both closes and maps to pause).
+- Sound on/off is a UI flag only until Stage 9.
 - Deaths only resolve after a shot (during settling), so zeroing health by hand mid-aim does nothing until someone fires.
 - **Crumble interpretation:** crumble % is a _per-shot_ chance that all loose ground collapses, not a per-pixel or per-column chance. This matches the manual ("how often loose ground will fall") and gives the Sonic Blaster a clear job. Rolling always consumes RNG, so determinism holds.
 - Dirt falling onto a tank passes through it (tanks aren't in the material grid), so a tank can end up buried. Shots still hit it, because tanks are checked before terrain.
@@ -58,17 +62,19 @@ Stage 3 is done: every environmental option works and can be toggled from a dev 
 
 ## Playtest script for current stage
 
-1. `npm run dev`, then open http://localhost:5173 and press **F2** for options.
-2. Walls: try `?walls=on&wind=low` with a steep full-power shot. It bounces off the ceiling and sides and the R badge shows. With `?walls=off&wind=none`, a shot heading off a side is dropped right away.
-3. Wind: `?wind=gale` gives absurd gusts; `?wind=none` gives a dead-straight parabola. Compare with the trail.
-4. Crumble: `?crumble=100`, then shoot into a cliff face. The overhang collapses with animation, and tanks on it ride down and take fall damage. `?crumble=0` leaves overhangs floating.
-5. `?fall=0`: tanks hover over craters. `?visible=0`: the shell and tracking markers are hidden (the trail still draws unless `trail=0`).
+1. `npm run dev`, then open http://localhost:5173 (add `?players=4`). Press F3 to hide the FPS overlay.
+2. HUD: click ◀ ▶ beside Angle and Power (hold to repeat), click the direction arrow to flip, click "Power" (+100, right-click −100), use the wheel over the field, and click FIRE.
+3. Drag on the field from your tank's side: the barrel follows, and distance sets power (dotted preview).
+4. The strip shows dim icons for weapons you don't own. Click the grenade or Lead Ball slot, or press Tab/Shift+Tab; the armed slot turns red and the counts drop as you fire. (All weapons still behave as simple blasts.)
+5. Press 1–9 or click a tank for its status; Esc/P for Game Status; F1 or ? for Controls. Any key or click closes them, and the game is frozen meanwhile.
+6. K then Y: everyone dies after the current shot. Q then Y: the game is aborted and a new round starts. S toggles the sound flag (toast plus the SND button).
 
 ## Known issues
 
 - The plateaus style can still leave an occasional 3–4 px wide spike (tank pads are flattened, so tanks are unaffected).
-- The placeholder HUD uses the browser's monospace font; Stage 4 brings a real pixel font and panel.
 - While the desktop app's browser pane is hidden, rAF stops entirely. That's a pane artifact, not a game bug. Use headless Playwright for visual checks (see WORKING_NOTES).
 - Column collapse can leave sheer vertical walls at the edges of a collapsed area. That's inherent to the column model and fits the original's look.
 - The dev FPS overlay covers the top-left of the HUD in dev builds (toggle with F3).
+- H/V guidance and shields show in the HUD but do nothing until Stage 7.
+- The DOM dev panel (F2) still uses a browser font; it gets replaced by the real menu in Stage 6.
 - A fast drag in the lab carves at sampled pointer positions only (gaps possible). It's a debug tool, so this is fine.

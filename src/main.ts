@@ -15,6 +15,7 @@ declare global {
       readonly ticks: number;
       readonly phase: Phase | undefined;
       readonly round: Round | undefined;
+      readonly overlay: string | null;
     };
   }
 }
@@ -53,6 +54,9 @@ window.__tankwars = {
   },
   get round() {
     return battle?.state;
+  },
+  get overlay() {
+    return battle?.openOverlay?.kind ?? null;
   },
 };
 
