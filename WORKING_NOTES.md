@@ -93,6 +93,7 @@ Equipment strip order in game = weapon index 0–17, then H, V (20 boxes).
 - Audio (Stage 9): synth-only WebAudio (`src/audio`). New sim events must get a case in `Sfx.roundEvent` (the switch is exhaustive). Audio unlocks on the first gesture; headless Chrome runs the AudioContext fine for e2e.
 - Touch layout (Stage 10): canvas width = clamp(400 × aspect, 800, 960); core 640×400 at `coreOffsetX`. All scenes use core coords via `screen.toLogical`; only the side panels use `toCanvas`. iOS keyboard needs focus inside the gesture (pointerup) and no canvas focus-steal on mousedown.
 - Mobile e2e: `test.use({ ...devices['iPhone 13 landscape'] })` minus `defaultBrowserType`, so it runs in Chromium.
+- Persistence (Stage 11): bump `SAVE_VERSION` and add a `MIGRATIONS[oldVersion]` entry when a saved shape changes. Sanitizers already tolerate added or missing fields, so a migration is only needed for renames or meaning changes. Changing the RNG, terrain generator or round setup changes what a resumed set replays (not a crash, just a different battlefield).
 - Crumble % = per-shot chance that _all_ loose ground collapses (column sand model), not per pixel.
 - Fall damage: (distance − 4 px) × 0.5. Initial drop-in is free.
 - Terrain surface band is 18–90% of field height from the top. Tanks will need headroom above the highest ground.

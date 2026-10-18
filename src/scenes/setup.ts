@@ -236,6 +236,7 @@ export class SetupScene implements Scene {
   }
 
   dispose(): void {
+    this.app.saveSlots();
     this.abort.abort();
     this.input.dispose();
     this.entry.dispose();

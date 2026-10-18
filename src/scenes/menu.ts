@@ -25,6 +25,7 @@ export class MenuScene implements Scene {
   readonly name = 'menu';
   private readonly input: UiInput;
   private readonly list: MenuList;
+  private notice: string | null = null;
 
   constructor(
     private readonly app: App,
@@ -162,13 +163,32 @@ export class MenuScene implements Scene {
         help: 'Computer players may buy weapons between games.',
       },
       {
+        id: 'defaults',
+        label: 'Restore defaults',
+        activate: () => {
+          app.restoreDefaults();
+          this.notice = 'Defaults restored';
+        },
+        help: 'Puts every option and player back to the original defaults.',
+      },
+      {
         id: 'start',
         label: 'Start',
         activate: () => app.showSetup(),
         help: `Opponents include ${AI_NAMES.lobber}, ${AI_NAMES.twanger} and more.`,
       },
     ];
-    this.list = new MenuList(items, 140, 44, 360, 20);
+    const saved = app.savedSet;
+    if (saved) {
+      items.unshift({
+        id: 'resume',
+        label: `Resume game ${saved.roundsPlayed + 1} of ${saved.settings.gamesPerSet}`,
+        activate: () => app.resumeSet(),
+        help: `Carry on the unfinished set (${saved.players.map((p) => p.name).join(', ')}).`,
+      });
+    }
+    // Fit all rows between the heading and the help line.
+    this.list = new MenuList(items, 140, 44, 360, Math.min(20, Math.floor(340 / items.length)));
   }
 
   update(): void {
@@ -197,7 +217,8 @@ export class MenuScene implements Scene {
     const { ctx } = this.app.screen;
     backdrop(ctx);
     heading(ctx, 'TANK WARS', 5);
-    if (this.message) drawText(ctx, this.message, LOGICAL_WIDTH / 2, 34, UI.accent, 1, 'center');
+    const message = this.notice ?? this.message;
+    if (message) drawText(ctx, message, LOGICAL_WIDTH / 2, 34, UI.accent, 1, 'center');
     else {
       const hint = this.app.screen.touch
         ? 'Tap ◀ ▶ (or the value) to change, tap Start to play'

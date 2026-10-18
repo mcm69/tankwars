@@ -1,7 +1,7 @@
 # Status
 
-**Current stage:** Stage 10 — Touch & responsive layout (complete, awaiting review)
-**Next:** Stage 11 — Persistence
+**Current stage:** Stage 11 — Persistence (complete, awaiting review)
+**Next:** Stage 12 — Visual polish & backgrounds
 **Last updated:** 2026-10-18
 
 See [PLAN.md](PLAN.md) for the full stage list. Update this file at the end of every work session
@@ -19,22 +19,21 @@ and at every stage boundary.
 - [x] 7 — Economy, shop, guidance & shields
 - [x] 8 — Computer opponents
 - [x] 9 — Audio
-- [x] 10 — Touch & responsive layout (awaiting review)
-- [ ] 11 — Persistence
+- [x] 10 — Touch & responsive layout
+- [x] 11 — Persistence (awaiting review)
 - [ ] 12 — Visual polish & backgrounds
 - [ ] 13 — Balance, QA & release prep
 
 ## Current stage progress
 
-Stage 10 is done: the game is fully playable on phones and tablets in landscape.
+Stage 11 is done: nothing is lost on reload.
 
-- **Touch layout** (`src/render/screen.ts`): on coarse-pointer devices (or `?touch=1`), the canvas widens to the device's aspect (800–960 logical px) and fills the screen with fractional scaling, with the 640×400 game "core" centered and **side panels** for big buttons. Narrower screens (iPhone SE, 4:3 tablets) letterbox vertically so the panels stay at least 80 px wide. Desktop is unchanged (640 wide, crisp integer scaling). Scenes still draw and hit-test in core coordinates; `Screen.toCanvas` and `toLogical` convert, and scenes can draw into the panels via `renderSides`.
-- **Side controls** (`src/input/touch-controls.ts`, `src/render/touch-panel.ts`): left panel has angle ◀ ▶ and power − + (hold to repeat and accelerate, multi-touch so both can be held), flip, and pause; right panel has a weapon carousel (icon, name, count), H/V guidance (lit when armed), and a big FIRE bar in the player's color, all showing live values. Drag-to-aim on the field and tap-a-tank status already worked through Pointer Events.
-- **Touch-friendly screens**: the Game Status (pause) panel now has **Resume / Controls / Mass kill / Quit** buttons (desktop benefits too); help shows touch controls on touch devices; menu rows are taller; shop −/+ have full-row-height tap targets; menu, setup and shop hints adapt to touch.
-- **Name entry on phones**: name fields open synchronously inside the tap (iOS only shows the keyboard then). The canvas no longer takes focus on mousedown, so a tap's emulated mouse events don't close the keyboard, and tapping elsewhere commits. The hidden input is 16 px so iOS doesn't zoom.
-- **Portrait**: a "turn your device sideways" prompt (CSS media query), and the game pauses until you rotate. Pinch, double-tap zoom, text selection, callouts and tap highlights are suppressed.
-- Robustness: pointer capture is best-effort everywhere (a failed capture used to drop the press).
-- Tests: 178 unit tests (new: touch canvas width, fill scaling, side-panel layout fits with no overlaps) + 20 e2e tests (new mobile suite under iPhone 13 landscape emulation: layout, side buttons, hold-repeat, pause → Quit by touch, tapping a name focuses the field and typing works, portrait prompt pauses and resumes). I checked iPhone 13, iPhone SE and iPad screenshots.
+- **Storage** (`src/persist/storage.ts`): versioned localStorage values (`tankwars:settings`, `tankwars:slots`, `tankwars:set`), each stored as `{ v, data }` with a migration table (empty at v1). Loading never throws. Missing, corrupt or newer-version data falls back to defaults, and every field is validated on its own (types, ranges, enums, name length), so an old or damaged save keeps whatever is still valid. Writes swallow quota and disabled-storage errors, and an in-memory store stands in when localStorage is unusable (private modes).
+- **What's remembered**: every settings change (the `App.settings` setter); the player roster when leaving setup; and the **unfinished set** at round boundaries. That's saved as `round` just before each game starts (after shopping, so a reload replays that game from its start, which is deterministic from the set seed), and as `between` right after a game ends (resuming shows the status screen, then shopping). It's cleared when the set finishes or is quit.
+- **Set snapshots** (`GameSet.snapshot` / `GameSet.restore`): settings, seed, games played, players (name, kind, resolved AI, inventory, score, money, wins, kills) and the last game's results.
+- **Menu**: a "Resume game N of M" row appears at the top when a set is saved (selected by default), and **Restore defaults** resets every option and player. Rows shrink a little to fit.
+- `?play` dev sets never read or write saved games, or your settings.
+- Tests: 184 unit tests (new: settings and roster round-trip; defaults for missing, corrupt, future-version and throwing stores; field-by-field sanitizing; a restored set replays the next game identically; inconsistent snapshots rejected) + 22 e2e tests (new: settings survive a reload; reloading mid-set offers Resume and restores the same game, standings and wind; quitting clears the save).
 
 ## Implementation notes
 
@@ -46,7 +45,7 @@ Stage 10 is done: the game is fully playable on phones and tablets in landscape.
 - The theme choice uses its own RNG stream (`seed ^ 0x5eed`) so presentation never consumes sim randomness. In Stage 6 the theme becomes part of round setup.
 - `window.__tankwars` is a debug handle (`ticks`, `scene`, `phase`, `round`, `overlay`, `app`, `touchLayout`) used by e2e tests and the console. `/` opens the title; `?play` jumps into a set (see above); `?lab` opens the terrain lab.
 - **Menus are canvas-rendered** (PLAN §2.1 item 6 revised): the widget kit is in `src/ui/widgets.ts`, and `TextEntry` (an off-screen input) handles names. Keys typed before the field takes focus (same tick) are fed in by the scene.
-- Settings (`src/game/settings.ts`) = sim `GameOptions` + sound, volume, fly sound, background, background speed, games per set, players, computers buy. They live in memory for now (persistence is Stage 11). Background and background speed are stored but take effect in Stage 12.
+- Settings (`src/game/settings.ts`) = sim `GameOptions` + sound, volume, fly sound, background, background speed, games per set, players, computers buy. They're saved to localStorage (Stage 11). Background and background speed are stored but take effect in Stage 12.
 - Commands are queued by input and applied at the start of the next sim tick, so e2e tests must poll after key presses.
 - Physics constants (in `src/sim/constants.ts`): gravity 0.05 px/tick², speed = power × 0.008, wind accel = wind × 0.00012, max speed 40 px/tick per axis. Stage 13 tunes everything.
 - All weapon numbers live in `items.ts` (behaviors) and `weapons.ts`/`effects.ts` (laser, dud, death and CRI constants). They're first-pass values for Stage 13 to tune against the original.
@@ -67,12 +66,11 @@ Stage 10 is done: the game is fully playable on phones and tablets in landscape.
 
 ## Playtest script for current stage
 
-1. On a phone or tablet on the same network, run `npm run dev -- --host` and open the shown URL (or use desktop Chrome DevTools device mode, or `?touch=1` to force the touch layout).
-2. Portrait shows the rotate prompt; landscape shows the game with side panels.
-3. Title → tap. Menu: tap ◀ ▶ or values. Setup: tap a name (the keyboard appears), type, tap elsewhere; tap Human/CPU and the personality.
-4. In battle: drag on the field to aim, or hold the ◀ ▶ / − + buttons. Use the weapon arrows, H/V, and FIRE. Tap a tank for its status. ‖ opens Game Status with Resume / Controls / Mass kill / Quit.
-5. Shop between games: tap rows or + to add, − to remove, Done.
-6. Desktop should look and play exactly as before.
+1. Change a few options (volume, wind, players), set up named players and personalities, then reload: everything is as you left it.
+2. Start a set of 3+ games, finish a game, and reload on the status screen, in the shop, or mid-game. The menu now offers "Resume game N of M". Resume: between games you get the status screen and shop; mid-game, that game restarts from its beginning with the same terrain and standings.
+3. Quit a set (Q, Y): no Resume row afterwards. Finish a set: same.
+4. "Restore defaults" in the menu puts all options and players back.
+5. Optional robustness check: in DevTools set `localStorage['tankwars:settings'] = 'oops'` and reload. You get defaults, with no errors.
 
 ## Known issues
 
@@ -81,6 +79,7 @@ Stage 10 is done: the game is fully playable on phones and tablets in landscape.
 - Column collapse can leave sheer vertical walls at the edges of a collapsed area. That's inherent to the column model and fits the original's look.
 - The dev FPS overlay covers the top-left of the HUD in dev builds (toggle with F3).
 - On phones the core HUD's small buttons and strip are still tappable but small; the side panels are the intended touch controls. Strip slot taps arm weapons, though the weapon carousel is easier.
+- Resuming mid-game restarts that game from its start (by design: saves happen at round boundaries, and the replay is deterministic).
 - I haven't tried a real iOS/Android device; it's verified with Chromium mobile emulation only (WebKit isn't installed for Playwright).
 - AI quirks are deliberate: Lobber and Lob & Shoot flounder with bouncing walls; Windless Wit repeats wind-blind misses; Rifleman is harmless unless you're above him.
 - The Background and Background speed menu options are stored but not rendered until Stage 12; sound options wait for Stage 9.

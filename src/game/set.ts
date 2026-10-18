@@ -4,6 +4,7 @@ import { aiShoppingList } from '../ai/buy';
 import { purchase, roundIncome } from './economy';
 import { startingInventory } from '../sim/items';
 import { Round, type RoundStats } from '../sim/round';
+import type { SetSnapshot } from '../persist/storage';
 import { gameOptionsOf, type PlayerKind, type PlayerSlot, type Settings } from './settings';
 
 export interface SetPlayer {
@@ -146,6 +147,55 @@ export class GameSet {
       if (cart.some((n) => n > 0)) bought.set(p.index, cart);
     }
     return bought;
+  }
+
+  /**
+   * Serializable state at a round boundary. Rounds are deterministic from the set seed, so
+   * this is all it takes to carry on later.
+   */
+  snapshot(stage: SetSnapshot['stage']): SetSnapshot {
+    return {
+      settings: { ...this.settings },
+      seed: this.seed,
+      roundsPlayed: this.roundsPlayed,
+      stage,
+      lastWinner: this.lastWinner,
+      lastRoundScores: [...this.lastRoundScores],
+      lastRoundIncome: [...this.lastRoundIncome],
+      players: this.players.map((p) => ({
+        name: p.name,
+        kind: p.kind,
+        ai: p.ai,
+        inventory: [...p.inventory],
+        score: p.score,
+        money: p.money,
+        wins: p.wins,
+        kills: p.kills,
+      })),
+    };
+  }
+
+  /** Rebuilds a set from a snapshot (see `snapshot`). */
+  static restore(snap: SetSnapshot): GameSet {
+    const slots: PlayerSlot[] = snap.players.map((p) => ({
+      name: p.name,
+      kind: p.kind,
+      ai: p.ai ?? 'stupid',
+    }));
+    const set = new GameSet(snap.settings, slots, snap.seed);
+    set.players.forEach((p, i) => {
+      const saved = snap.players[i]!;
+      p.inventory = [...saved.inventory];
+      p.score = saved.score;
+      p.money = saved.money;
+      p.wins = saved.wins;
+      p.kills = saved.kills;
+    });
+    set.roundsPlayed = snap.roundsPlayed;
+    set.lastWinner = snap.lastWinner;
+    set.lastRoundScores = [...snap.lastRoundScores];
+    set.lastRoundIncome = [...snap.lastRoundIncome];
+    return set;
   }
 
   /** Players by score (then wins), best first. */
