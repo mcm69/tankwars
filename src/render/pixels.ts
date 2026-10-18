@@ -37,3 +37,37 @@ export function drawPixelLine(
     );
   }
 }
+
+/** 1-px circle outline (midpoint algorithm). */
+export function strokePixelCircle(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  r: number,
+): void {
+  const x0 = Math.round(cx);
+  const y0 = Math.round(cy);
+  let x = Math.round(r);
+  let y = 0;
+  let err = 1 - x;
+  while (x >= y) {
+    for (const [dx, dy] of [
+      [x, y],
+      [y, x],
+      [-y, x],
+      [-x, y],
+      [-x, -y],
+      [-y, -x],
+      [y, -x],
+      [x, -y],
+    ] as const) {
+      ctx.fillRect(x0 + dx, y0 + dy, 1, 1);
+    }
+    y++;
+    if (err < 0) err += 2 * y + 1;
+    else {
+      x--;
+      err += 2 * (y - x) + 1;
+    }
+  }
+}

@@ -92,12 +92,15 @@ export class BattleScene {
     for (const t of this.toasts) t.ticks--;
     this.toasts = this.toasts.filter((t) => t.ticks > 0);
 
+    // Each key press arrives as a raw 'key' event followed by what it maps to. When an overlay
+    // consumes a press, skip the rest of that same press (Esc closes an overlay and also maps
+    // to pause, which would reopen it), but keep later presses from the same tick.
+    let skipRestOfPress = false;
     for (const e of events) {
-      // An overlay opened earlier in this same tick gets the rest of the events. Once it has
-      // consumed one, drop the remainder: a single key press (Esc) also maps to an action
-      // (pause) that would otherwise reopen what it just closed.
+      if (e.kind === 'key') skipRestOfPress = false;
+      else if (skipRestOfPress) continue;
       if (this.overlay) {
-        if (this.handleOverlayInput(e)) break;
+        if (this.handleOverlayInput(e)) skipRestOfPress = true;
         continue;
       }
       if (e.kind === 'ui') this.handleUi(e.action);
@@ -112,7 +115,13 @@ export class BattleScene {
     if (this.overlay) return; // the sim is frozen while an overlay is open
 
     this.round.tick();
-    this.renderer.onEvents(this.round, this.round.drainEvents());
+    const roundEvents = this.round.drainEvents();
+    this.renderer.onEvents(this.round, roundEvents);
+    for (const e of roundEvents) {
+      if (e.type === 'fireRejected') {
+        this.toast('Laser needs 100+ energy: raise power', '#ff9a6a');
+      }
+    }
     this.renderer.tick();
 
     const p = this.round.projectile;

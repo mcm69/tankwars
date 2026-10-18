@@ -12,6 +12,8 @@ export interface GameOptions {
   crumble: number;
   /** Unsupported tanks fall and take damage; when off they hover. */
   tanksFall: boolean;
+  /** Flying debris from destroyed tanks damages other tanks (final blasts always do). */
+  explosionsKill: boolean;
   /** Presentation: the shell (and its off-screen tracking markers) is drawn. */
   visibleShot: boolean;
   /** Presentation: shots leave a trail in the shooter's color for the rest of the round. */
@@ -24,6 +26,7 @@ export const DEFAULT_OPTIONS: Readonly<GameOptions> = {
   walls: 'random',
   crumble: 50,
   tanksFall: true,
+  explosionsKill: true,
   visibleShot: true,
   shotTrail: true,
 };

@@ -91,7 +91,7 @@ describe('Round', () => {
     round.command({ type: 'power', delta: -10_000 });
     round.command({ type: 'fire' });
     const events = tickUntil(round, () => round.phase === 'roundOver');
-    expect(events).toContainEqual({ type: 'tankDied', tankId: me });
+    expect(events).toContainEqual(expect.objectContaining({ type: 'tankDied', tankId: me }));
     expect(round.winnerId).toBe(1 - me);
   });
 

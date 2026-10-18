@@ -1,7 +1,6 @@
 import { Rng } from '../core/rng';
 import {
   CRUMBLE_MAX_PASSES,
-  EXPLOSION_TICKS,
   FALL_DAMAGE_PER_PIXEL,
   FALL_DAMAGE_THRESHOLD,
   FIELD_HEIGHT,
@@ -9,7 +8,7 @@ import {
   TANK_FALL_SPEED,
 } from './constants';
 import { Crumbler, hasLooseDirt } from './crumble';
-import { blastDamage, type Blast } from './damage';
+import { Effects } from './effects';
 import {
   DEFAULT_OPTIONS,
   resolveWalls,
@@ -19,10 +18,22 @@ import {
   type WindLevel,
 } from './options';
 import { launch, stepProjectile, type Projectile } from './physics';
-import { ITEMS, LEAD_BALL, WEAPON_COUNT } from './items';
-import { createTank, isSupported, maxPower, nextOwnedWeapon, tankCenter, type Tank } from './tank';
+import { LEAD_BALL, WEAPON_COUNT } from './items';
+import { createTank, isSupported, maxPower, nextOwnedWeapon, type Tank } from './tank';
 import { Material, type Terrain } from './terrain';
 import { generateTerrain, type TerrainStyle } from './terrain-gen';
+import {
+  behaviorOf,
+  canDud,
+  detonate,
+  DUD_DAMAGE,
+  dudChance,
+  fireLaser,
+  LASER_MIN_ENERGY,
+} from './weapons';
+import type { DeathStyle, RoundEvent, World } from './world';
+
+export type { DeathStyle, RoundEvent } from './world';
 
 export interface PlayerSetup {
   name: string;
@@ -40,13 +51,14 @@ export interface RoundConfig {
   wind?: number;
   /** Fixed wall behavior, overriding the wall mode (tests). */
   walls?: boolean;
+  /** Fixed dud chance on tank hits (tests). */
+  dudChance?: number;
+  /** Fixed death style (tests). */
+  deathStyle?: DeathStyle;
 }
 
-/** A dying tank's final explosion, which can catch neighbors. */
-export const DEATH_BLAST = { radius: 22, damage: 80 } as const;
-
 export type Phase =
-  'dropping' | 'aiming' | 'flying' | 'exploding' | 'crumbling' | 'settling' | 'roundOver';
+  'dropping' | 'aiming' | 'flying' | 'effects' | 'crumbling' | 'settling' | 'roundOver';
 
 export type Command =
   | { type: 'aim'; delta: number }
@@ -60,23 +72,6 @@ export type Command =
   /** Everyone dies once the current turn is over (the original's Ctrl-M). */
   | { type: 'massKill' };
 
-export type RoundEvent =
-  | { type: 'turn'; tankId: number }
-  | { type: 'fire'; tankId: number }
-  | { type: 'explode'; x: number; y: number; radius: number; harmless: boolean }
-  | { type: 'tankHit'; tankId: number; damage: number }
-  | { type: 'tankDied'; tankId: number }
-  | { type: 'roundOver'; winnerId: number | null };
-
-export interface Explosion {
-  readonly x: number;
-  readonly y: number;
-  readonly radius: number;
-  /** A harmless puff (e.g. a Lead Ball landing): no crater, no damage. */
-  readonly harmless: boolean;
-  age: number;
-}
-
 /** Margin kept free at each side when placing tanks. */
 const PLACEMENT_MARGIN = 24;
 /** Half-width of the flat pad flattened under each tank. */
@@ -86,7 +81,7 @@ const PAD_HALF_WIDTH = 9;
  * One round of play: terrain, tanks, turns, shots, until one tank (or none) is left.
  * Deterministic: the same config and command sequence always produce the same result.
  */
-export class Round {
+export class Round implements World {
   readonly rng: Rng;
   readonly terrain: Terrain;
   readonly terrainStyle: TerrainStyle;
@@ -104,7 +99,9 @@ export class Round {
   projectile: Projectile | null = null;
   /** Set by the massKill command; everyone dies when the current turn resolves. */
   massKillPending = false;
-  readonly explosions: Explosion[] = [];
+  /** Explosions, reactions, particles, beams… everything still playing out after a shot. */
+  readonly effects = new Effects();
+  forceCrumble = false;
   tickCount = 0;
   private events: RoundEvent[] = [];
   private readonly fallSpeed = new Map<number, number>();
@@ -112,6 +109,8 @@ export class Round {
   private readonly fallStart = new Map<number, number>();
   private crumbler: Crumbler | null = null;
   private crumbleTicks = 0;
+  private readonly dudOverride: number | undefined;
+  private readonly deathStyleOverride: DeathStyle | undefined;
 
   constructor(config: RoundConfig) {
     if (config.players.length < 2) throw new RangeError('A round needs at least 2 players');
@@ -130,6 +129,8 @@ export class Round {
     this.wind = config.wind ?? wind;
     const walls = resolveWalls(this.rng, this.options.walls);
     this.walls = config.walls ?? walls;
+    this.dudOverride = config.dudChance;
+    this.deathStyleOverride = config.deathStyle;
 
     const xs = this.placeTanks(config.players.length);
     this.tanks = config.players.map((p, i) => {
@@ -141,6 +142,17 @@ export class Round {
 
   get current(): Tank | undefined {
     return this.tanks[this.currentId];
+  }
+
+  emit(e: RoundEvent): void {
+    this.events.push(e);
+  }
+
+  damage(tankId: number, amount: number): void {
+    const t = this.tanks[tankId];
+    if (!t?.alive || amount <= 0) return;
+    t.health = Math.max(0, t.health - amount);
+    this.events.push({ type: 'tankHit', tankId, damage: amount });
   }
 
   drainEvents(): RoundEvent[] {
@@ -184,21 +196,47 @@ export class Round {
         t.selected = nextOwnedWeapon(t, t.selected, cmd.dir);
         break;
       case 'fire':
-        this.fire(t);
-        break;
+        return this.fire(t);
     }
     return true;
   }
 
-  private fire(t: Tank): void {
+  private fire(t: Tank): boolean {
     // An empty selection falls back to a Lead Ball; with nothing at all, it still fires one.
     let weapon = t.selected;
     if (!(t.inventory[weapon]! > 0)) weapon = LEAD_BALL;
+
+    if (behaviorOf(weapon).kind === 'laser') {
+      // The laser spends energy equal to the power setting, and needs a minimum to fire.
+      const energy = Math.min(t.power, t.inventory[weapon]!);
+      if (energy < LASER_MIN_ENERGY) {
+        this.events.push({ type: 'fireRejected', tankId: t.id, reason: 'laserEnergy' });
+        return false;
+      }
+      t.inventory[weapon] = t.inventory[weapon]! - energy;
+      this.reselectIfEmpty(t);
+      this.events.push({ type: 'fire', tankId: t.id, weapon });
+      const { points } = fireLaser(this, t, energy);
+      this.effects.beam(points, t.color);
+      this.events.push({ type: 'laser', tankId: t.id });
+      this.phase = 'effects';
+      return true;
+    }
+
     t.inventory[weapon] = Math.max(0, t.inventory[weapon]! - 1);
-    if (t.inventory[t.selected]! <= 0) t.selected = nextOwnedWeapon(t, t.selected, 1);
+    this.reselectIfEmpty(t);
     this.projectile = launch(t, weapon);
     this.phase = 'flying';
-    this.events.push({ type: 'fire', tankId: t.id });
+    this.events.push({ type: 'fire', tankId: t.id, weapon });
+    return true;
+  }
+
+  private reselectIfEmpty(t: Tank): void {
+    const left = t.inventory[t.selected]!;
+    const isLaser = behaviorOf(t.selected).kind === 'laser';
+    if (left <= 0 || (isLaser && left < LASER_MIN_ENERGY)) {
+      t.selected = nextOwnedWeapon(t, t.selected, 1);
+    }
   }
 
   tick(): void {
@@ -213,10 +251,9 @@ export class Round {
       case 'flying':
         this.stepFlight();
         break;
-      case 'exploding':
-        for (const e of this.explosions) e.age++;
-        removeWhere(this.explosions, (e) => e.age >= EXPLOSION_TICKS);
-        if (this.explosions.length === 0) this.afterExplosions();
+      case 'effects':
+        this.effects.tick(this);
+        if (!this.effects.busy) this.afterEffects();
         break;
       case 'crumbling':
         this.stepCrumble();
@@ -232,49 +269,34 @@ export class Round {
     if (!p) return;
     const r = stepProjectile(p, this);
     if (r.kind === 'flying') return;
+    if (r.kind === 'hitTank' && canDud(behaviorOf(p.weapon))) {
+      const chance = this.dudOverride ?? dudChance(Math.hypot(p.vx, p.vy));
+      if (this.rng.chance(chance)) {
+        // Fails to detonate: bores through the tank and keeps flying.
+        p.passed.push(r.tankId);
+        this.damage(r.tankId, DUD_DAMAGE);
+        this.events.push({ type: 'dud', tankId: r.tankId });
+        return;
+      }
+    }
     this.projectile = null;
     if (r.kind === 'lost') {
       this.phase = 'settling';
       return;
     }
-    // Temporary until Stage 5's weapon behaviors: every weapon is a plain blast.
-    const blast = ITEMS[p.weapon]!.blast ?? { radius: 0, damage: 0 };
-    this.detonate({ x: r.x, y: r.y, ...blast });
+    detonate(this, this.effects, p.weapon, r.x, r.y);
+    this.phase = 'effects';
   }
 
-  private detonate(blast: Blast): void {
-    if (blast.radius <= 0) {
-      this.explosions.push({ x: blast.x, y: blast.y, radius: 4, harmless: true, age: 0 });
-      this.events.push({ type: 'explode', x: blast.x, y: blast.y, radius: 4, harmless: true });
-      this.phase = 'exploding';
-      return;
-    }
-    this.terrain.carveCircle(blast.x, blast.y, blast.radius);
-    for (const [id, dmg] of blastDamage(blast, this.tanks)) {
-      const t = this.tanks[id]!;
-      t.health = Math.max(0, t.health - dmg);
-      this.events.push({ type: 'tankHit', tankId: id, damage: dmg });
-    }
-    this.explosions.push({
-      x: blast.x,
-      y: blast.y,
-      radius: blast.radius,
-      harmless: false,
-      age: 0,
-    });
-    this.events.push({
-      type: 'explode',
-      x: blast.x,
-      y: blast.y,
-      radius: blast.radius,
-      harmless: false,
-    });
-    this.phase = 'exploding';
-  }
-
-  /** Rolls the crumble chance: loose ground either collapses now or stays put this time. */
-  private afterExplosions(): void {
-    if (this.rng.chance(this.options.crumble / 100) && hasLooseDirt(this.terrain)) {
+  /**
+   * Rolls the crumble chance: loose ground either collapses now or stays put this time.
+   * A Sonic Blaster forces the collapse (the roll still happens, keeping RNG use stable).
+   */
+  private afterEffects(): void {
+    const roll = this.rng.chance(this.options.crumble / 100);
+    const force = this.forceCrumble;
+    this.forceCrumble = false;
+    if ((roll || force) && hasLooseDirt(this.terrain)) {
       this.crumbler = new Crumbler(this.terrain);
       this.crumbleTicks = 0;
       this.phase = 'crumbling';
@@ -305,8 +327,8 @@ export class Round {
     const doomed = this.order.map((id) => this.tanks[id]!).find((t) => t.alive && t.health <= 0);
     if (doomed) {
       doomed.alive = false;
-      this.events.push({ type: 'tankDied', tankId: doomed.id });
-      this.detonate({ ...tankCenter(doomed), ...DEATH_BLAST });
+      this.effects.startDeath(this, doomed, this.deathStyleOverride ?? pickDeathStyle(this.rng));
+      this.phase = 'effects';
       return;
     }
     if (this.massKillPending) {
@@ -376,10 +398,7 @@ export class Round {
     this.fallSpeed.delete(t.id);
     this.fallStart.delete(t.id);
     if (start === undefined || initialDrop) return;
-    const dmg = fallDamage(t.y - start);
-    if (dmg <= 0) return;
-    t.health = Math.max(0, t.health - dmg);
-    this.events.push({ type: 'tankHit', tankId: t.id, damage: dmg });
+    this.damage(t.id, fallDamage(t.y - start));
   }
 
   /** Picks spread-out x positions in random player order and flattens a pad under each. */
@@ -422,8 +441,8 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
 
-function removeWhere<T>(arr: T[], pred: (v: T) => boolean): void {
-  let w = 0;
-  for (const v of arr) if (!pred(v)) arr[w++] = v;
-  arr.length = w;
+/** Death styles from the original: mostly standard explosions, sometimes something odd. */
+export function pickDeathStyle(rng: Rng): DeathStyle {
+  const r = rng.float();
+  return r < 0.55 ? 'standard' : r < 0.7 ? 'dirt' : r < 0.85 ? 'fade' : 'meltdown';
 }

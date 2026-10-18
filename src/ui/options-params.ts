@@ -17,6 +17,8 @@ export function optionsFromParams(params: URLSearchParams): Partial<GameOptions>
   };
   const fall = flag('fall');
   if (fall !== undefined) out.tanksFall = fall;
+  const kills = flag('kills');
+  if (kills !== undefined) out.explosionsKill = kills;
   const visible = flag('visible');
   if (visible !== undefined) out.visibleShot = visible;
   const trail = flag('trail');

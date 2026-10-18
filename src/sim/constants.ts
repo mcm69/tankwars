@@ -20,8 +20,6 @@ export const MAX_HEALTH = 100;
 /** Power is capped at health × this (full health = 1000). */
 export const POWER_PER_HEALTH = 10;
 
-/** Ticks a fireball takes to play out. Terrain and damage resolve on impact. */
-export const EXPLOSION_TICKS = 28;
 /** Fall speed cap for unsupported tanks, pixels per tick. */
 export const TANK_FALL_SPEED = 4;
 

@@ -5,6 +5,7 @@ import { DebugOverlay } from './render/debug-overlay';
 import { Screen } from './render/screen';
 import { BattleScene } from './scenes/battle';
 import { TerrainLab } from './scenes/terrain-lab';
+import { fullInventory, itemIndex } from './sim/items';
 import { optionsFromParams } from './ui/options-params';
 import type { Phase, Round } from './sim/round';
 
@@ -39,7 +40,11 @@ const battle = params.has('lab')
       screen,
       debug,
       seed,
-      Array.from({ length: playerCount }, (_, i) => ({ name: `Player ${i + 1}`, color: i })),
+      Array.from({ length: playerCount }, (_, i) => ({
+        name: `Player ${i + 1}`,
+        color: i,
+        ...(params.has('arsenal') ? { inventory: devArsenal() } : {}),
+      })),
       optionsFromParams(params),
     );
 const scene = battle ?? new TerrainLab(screen, debug, seed);
@@ -71,3 +76,10 @@ new GameLoop(TICK_RATE, {
     debug.frame();
   },
 }).start();
+
+/** ?arsenal: plenty of every weapon (and laser energy) for trying them out. */
+function devArsenal(): number[] {
+  const inv = fullInventory(20);
+  inv[itemIndex('laser')] = 5000;
+  return inv;
+}

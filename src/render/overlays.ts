@@ -105,7 +105,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, o: Overlay, c: Overla
 }
 
 function drawPause(ctx: CanvasRenderingContext2D, { round, roundNumber, soundOn }: OverlayContext) {
-  const r = panel(ctx, 340, 160, 'Game Status');
+  const r = panel(ctx, 340, 172, 'Game Status');
   const o = round.options;
   const wind = `${o.wind === 'random' ? `random (${round.windLevel})` : o.wind}, now ${Math.abs(round.wind)}${round.wind > 0 ? '→' : round.wind < 0 ? '←' : ''}`;
   rows(
@@ -121,6 +121,7 @@ function drawPause(ctx: CanvasRenderingContext2D, { round, roundNumber, soundOn 
       ['Shot visible', yesNo(o.visibleShot)],
       ['Shot trail', yesNo(o.shotTrail)],
       ['Tanks fall', yesNo(o.tanksFall)],
+      ['Explosions kill', yesNo(o.explosionsKill)],
       ['Mass kill pending', yesNo(round.massKillPending)],
     ],
     110,

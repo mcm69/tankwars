@@ -6,6 +6,23 @@
 
 export type ItemKind = 'weapon' | 'guidance' | 'shield';
 
+/** What a weapon does when it lands (or, for the laser, when fired). */
+export type Behavior =
+  /** Fireball: carves a crater and damages tanks with linear falloff. */
+  | { readonly kind: 'blast'; readonly radius: number; readonly damage: number }
+  /** Just flies; lands with a puff. */
+  | { readonly kind: 'harmless' }
+  /** Instant beam that spends laser energy (the power setting) instead of one unit. */
+  | { readonly kind: 'laser' }
+  /** Chain reaction eating `budget` pixels of ground; fluid ("D") spreads densely. */
+  | { readonly kind: 'cri'; readonly budget: number; readonly fluid: boolean }
+  /** Collapses all loose ground on the field. */
+  | { readonly kind: 'sonic' }
+  /** Fills a ball of dirt. */
+  | { readonly kind: 'dirt'; readonly radius: number }
+  /** Sprays dirt clods into the air, where they freeze into floating dirt. */
+  | { readonly kind: 'explosiveDirt'; readonly clods: number };
+
 export interface ItemDef {
   readonly id: string;
   readonly name: string;
@@ -13,11 +30,8 @@ export interface ItemDef {
   readonly kind: ItemKind;
   readonly price: number | null;
   readonly bundle: number;
-  /**
-   * Temporary blast parameters until Stage 5 gives each weapon its real behavior.
-   * radius 0 = harmless (no crater, no damage).
-   */
-  readonly blast?: { readonly radius: number; readonly damage: number };
+  /** Weapons only. */
+  readonly behavior?: Behavior;
 }
 
 export const ITEMS: readonly ItemDef[] = [
@@ -28,7 +42,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: null,
     bundle: 0,
-    blast: { radius: 0, damage: 0 },
+    behavior: { kind: 'harmless' },
   },
   {
     id: 'incinerator',
@@ -37,7 +51,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 3000,
     bundle: 100,
-    blast: { radius: 20, damage: 150 },
+    behavior: { kind: 'blast', radius: 20, damage: 150 },
   },
   {
     id: 'incineratorMk2',
@@ -46,7 +60,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 4000,
     bundle: 10,
-    blast: { radius: 32, damage: 150 },
+    behavior: { kind: 'blast', radius: 32, damage: 160 },
   },
   {
     id: 'nuke20kt',
@@ -55,7 +69,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 7000,
     bundle: 2,
-    blast: { radius: 60, damage: 200 },
+    behavior: { kind: 'blast', radius: 62, damage: 220 },
   },
   {
     id: 'nuke5mt',
@@ -64,7 +78,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 10000,
     bundle: 1,
-    blast: { radius: 110, damage: 250 },
+    behavior: { kind: 'blast', radius: 115, damage: 260 },
   },
   {
     id: 'laser',
@@ -73,7 +87,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 10000,
     bundle: 1000,
-    blast: { radius: 20, damage: 150 },
+    behavior: { kind: 'laser' },
   },
   {
     id: 'cri4d',
@@ -82,7 +96,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 5000,
     bundle: 5,
-    blast: { radius: 20, damage: 150 },
+    behavior: { kind: 'cri', budget: 2500, fluid: true },
   },
   {
     id: 'cri8nd',
@@ -91,7 +105,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 5000,
     bundle: 10,
-    blast: { radius: 20, damage: 150 },
+    behavior: { kind: 'cri', budget: 4000, fluid: false },
   },
   {
     id: 'cri8d',
@@ -100,7 +114,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 10000,
     bundle: 3,
-    blast: { radius: 20, damage: 150 },
+    behavior: { kind: 'cri', budget: 7000, fluid: true },
   },
   {
     id: 'cri20nd',
@@ -109,7 +123,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 10000,
     bundle: 3,
-    blast: { radius: 20, damage: 150 },
+    behavior: { kind: 'cri', budget: 12000, fluid: false },
   },
   {
     id: 'cri20d',
@@ -118,7 +132,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 15000,
     bundle: 1,
-    blast: { radius: 20, damage: 150 },
+    behavior: { kind: 'cri', budget: 30000, fluid: true },
   },
   {
     id: 'grenade',
@@ -127,7 +141,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: null,
     bundle: 0,
-    blast: { radius: 8, damage: 110 },
+    behavior: { kind: 'blast', radius: 8, damage: 110 },
   },
   {
     id: 'sonic',
@@ -136,7 +150,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 4500,
     bundle: 10,
-    blast: { radius: 10, damage: 40 },
+    behavior: { kind: 'sonic' },
   },
   {
     id: 'dirtBall',
@@ -145,7 +159,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 4000,
     bundle: 10,
-    blast: { radius: 20, damage: 150 },
+    behavior: { kind: 'dirt', radius: 18 },
   },
   {
     id: 'dirtBallMk2',
@@ -154,7 +168,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 6000,
     bundle: 7,
-    blast: { radius: 20, damage: 150 },
+    behavior: { kind: 'dirt', radius: 28 },
   },
   {
     id: 'dirtCompressed',
@@ -163,7 +177,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 8000,
     bundle: 3,
-    blast: { radius: 20, damage: 150 },
+    behavior: { kind: 'dirt', radius: 40 },
   },
   {
     id: 'dirtSuper',
@@ -172,7 +186,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 10000,
     bundle: 1,
-    blast: { radius: 20, damage: 150 },
+    behavior: { kind: 'dirt', radius: 56 },
   },
   {
     id: 'dirtExplosive',
@@ -181,7 +195,7 @@ export const ITEMS: readonly ItemDef[] = [
     kind: 'weapon',
     price: 4500,
     bundle: 10,
-    blast: { radius: 20, damage: 150 },
+    behavior: { kind: 'explosiveDirt', clods: 48 },
   },
   {
     id: 'guidanceH',

@@ -13,6 +13,8 @@ export interface Projectile {
   readonly ownerId: number;
   /** Item index of the weapon in flight. */
   readonly weapon: number;
+  /** Tanks this shell already bored through as a dud (it ignores them from then on). */
+  readonly passed: number[];
   age: number;
 }
 
@@ -42,6 +44,7 @@ export function launch(tank: Tank, weapon = tank.selected): Projectile {
     vy: -Math.sin(a) * speed,
     ownerId: tank.id,
     weapon,
+    passed: [],
     age: 0,
   };
 }
@@ -83,7 +86,9 @@ export function stepProjectile(p: Projectile, world: PhysicsWorld): StepResult {
       }
     }
     for (const t of tanks) {
-      if (hitsTank(t, p.x, p.y)) return { kind: 'hitTank', x: p.x, y: p.y, tankId: t.id };
+      if (hitsTank(t, p.x, p.y) && !p.passed.includes(t.id)) {
+        return { kind: 'hitTank', x: p.x, y: p.y, tankId: t.id };
+      }
     }
     if (p.y >= terrain.height) return { kind: 'hitTerrain', x: p.x, y: terrain.height - 1 };
     if (terrain.isSolid(p.x, p.y)) return { kind: 'hitTerrain', x: p.x, y: p.y };

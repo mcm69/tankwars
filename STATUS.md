@@ -1,7 +1,7 @@
 # Status
 
-**Current stage:** Stage 4 — HUD & full controls (complete, awaiting review)
-**Next:** Stage 5 — Weapon system & full arsenal
+**Current stage:** Stage 5 — Weapon system & full arsenal (complete, awaiting review)
+**Next:** Stage 6 — Game flow: title, menu, player setup, sets
 **Last updated:** 2026-10-18
 
 See [PLAN.md](PLAN.md) for the full stage list. Update this file at the end of every work session
@@ -13,8 +13,8 @@ and at every stage boundary.
 - [x] 1 — Terrain & battlefield rendering
 - [x] 2 — Tanks, aiming, ballistics (first playable)
 - [x] 3 — Environment rules
-- [x] 4 — HUD & full controls (desktop, awaiting review)
-- [ ] 5 — Weapon system & full arsenal
+- [x] 4 — HUD & full controls (desktop)
+- [x] 5 — Weapon system & full arsenal (awaiting review)
 - [ ] 6 — Game flow: title, menu, player setup, sets
 - [ ] 7 — Economy, shop, guidance & shields
 - [ ] 8 — Computer opponents
@@ -26,16 +26,24 @@ and at every stage boundary.
 
 ## Current stage progress
 
-Stage 4 is done: the play screen is feature-complete for keyboard and mouse.
+Stage 5 is done: all 18 weapons behave distinctly, and tanks die in four styles.
 
-- **Items and inventory** (`src/sim/items.ts`): the full catalog of 18 weapons, H/V guidance and 2 shields, in the original's strip order, with prices and bundles from BOMB.EXE. Tanks carry an `inventory` and an armed `selected` weapon, and start with the 2.5 rules (100 Lead Balls, 10 Grenades, 3 Incinerators). New sim commands: `selectWeapon`, `cycleWeapon`, `setAim`, `setPower`, `massKill`. Firing spends ammo and moves to the next owned weapon when one runs out; with nothing left it fires a Lead Ball. **Every weapon is still a plain blast with temporary radius/damage numbers** (Lead Ball is a harmless puff) until Stage 5.
-- **Bitmap font** (`src/render/font.ts`): an original 5×7 LCD-style font (ASCII plus arrows, ◀▶, …, ×, ±) rendered from cached per-color atlases at any integer scale, with drop shadows, plus 3×5 micro digits for counts. All canvas text now uses it; no browser fonts on the canvas.
-- **Icons** (`src/render/icons.ts`): procedural 10×10 pixel icons for all 22 items, plus dimmed "not owned" variants.
-- **HUD** (`hud.ts`, `hud-layout.ts`): Angle and Power with ◀ ▶ buttons, a direction arrow (click to flip), player name in color, Men, wind and level, the R badge, the armed weapon's name and count, a big FIRE button, and the equipment strip of 20 slots (dim = not owned, outlined = owned, red = armed, with counts), plus the shield indicator and help/pause/sound buttons. The layout is shared with the pointer hit-tester.
-- **Keyboard** (`input/keyboard.ts`): adds Tab/Shift+Tab (weapon), H/V (guidance; for now a toast), 1–9/0 (player status), Esc/P (pause), F1/? (help), S (sound), K (mass kill), Q (quit).
-- **Mouse** (`input/pointer.ts`, `input/aim.ts`): drag on the field to aim (direction from the turret, distance = power, dotted preview); click ◀ ▶ (hold repeats and accelerates); click "Power" for ±100; click a slot to arm; wheel for power (Shift ×10); click any tank for its status; FIRE button.
-- **Overlays** (`render/overlays.ts`): Game Status (pause), Controls (help), player status card (stats plus owned equipment), and Yes/No confirmations for mass kill and quit. Overlays freeze the sim. Toasts show feedback (sound, guidance, game aborted).
-- Tests: 89 unit tests (new: catalog/prices/icons, inventory and weapon commands, Lead Ball harmlessness, mass kill, HUD hit-test with no overlaps, aim math, font glyphs, keyboard mapping and repeat) + 8 e2e tests (new: HUD clicks, drag-aim, overlays freeze/close, mass-kill confirm); all pass. I checked the HUD and every overlay with headless screenshots.
+- **Behaviors** (`ItemDef.behavior` in `items.ts`; dispatch in `src/sim/weapons.ts`):
+  - Blast tiers (radius/damage): Grenade 8/110, Incinerator 20/150, Mark II 32/160, 20 Kt 62/220, 5 Mt 115/260. Big blasts get a flash and a shockwave ring.
+  - Lead Ball: a harmless puff.
+  - **Laser**: an instant straight beam with no gravity or wind. It spends energy equal to the power setting (minimum 100; otherwise the shot is refused with a toast). Range is 1.2 px per energy, boring through dirt costs 3×, and passing through a tank costs 120 and deals 40–100 damage depending on how fresh the beam is. It reflects off walls when they bounce and leaves a 4–5 px tunnel.
+  - **CRIs**: a breadth-first burn through connected ground, seeded around the impact, with a pixel budget (4/D 2.5k, 8/ND 4k, 8/D 7k, 20/ND 12k, 20/D 30k). "D" spreads to 8 neighbors (p 0.6, 220 cells/tick) into smooth caverns; "ND" to 4 neighbors (p 0.52, 90/tick) into lacy, ragged holes. Tanks touching the burn take up to 40 damage. The burn glows while active.
+  - **Sonic Blaster**: a small blast, expanding rings, and a forced collapse of all loose ground (even at crumble 0%).
+  - **Dirt balls**: radius 18/28/40/56 balls of dirt that grow over 12 ticks and can bury tanks.
+  - **Explosive Dirt**: 48 clods sprayed upward that freeze into floating dirt when they run out of steam, or pile up where they land. Crumble then decides whether they fall.
+  - Soft weapons (CRI, sonic, explosive dirt) add a small seed blast on impact.
+- **Duds**: explosive shells hitting a tank may bore through instead (25 damage, "DUD!") and keep flying. The chance is 2.5%, or 12% for very fast impacts (speed > 7.2 px/tick, roughly power > 900).
+- **Death styles** (picked per death): standard 55% (final blast 22/80 plus 16 debris streamers), dirt 15% (buries the spot), fade 15% (vanishes quietly), meltdown 15% (pulses for 50 ticks, then a 46/120 blast).
+- New option **Explosions Kill** (default on, also on the F2 panel and `?kills=0`): debris streamers deal 8 damage to tanks they hit. Final blasts always hurt.
+- **Effects engine** (`src/sim/effects.ts`): explosions, reactions, particles, beams, dirt fills, sonic waves and dying tanks. The round's `exploding` phase became `effects` and lasts while anything is active. `Round` implements a narrow `World` interface (`src/sim/world.ts`) that weapons and effects operate on, so they're unit-testable without a full round.
+- `?arsenal`: every player gets 20 of each weapon plus 5000 laser energy.
+- Fix: input events from several key presses in one tick could be dropped after an overlay closed. Now only the rest of the consuming key press is skipped.
+- Tests: 117 unit tests (new: 28 weapon tests covering blast/dirt tiers, harmless lead, CRI budget, termination and determinism, sonic forced collapse, explosive dirt, laser tunnel/pierce/range/reflect/energy, duds on/off/never-for-dirt, all 4 death styles, debris versus the explosions-kill option) + 9 e2e tests (new: arsenal with CRI and laser resolving, and fast key sequences around overlays). I checked CRI D/ND, laser, nuke and explosive dirt visually with headless screenshots.
 
 ## Implementation notes
 
@@ -48,9 +56,10 @@ Stage 4 is done: the play screen is feature-complete for keyboard and mouse.
 - `window.__tankwars` is a debug handle (`ticks`, `phase`, `round`, `overlay`) used by e2e tests and the console. URL params: `?seed=N`, `?players=N`, `?lab`, plus the option params above.
 - Commands are queued by input and applied at the start of the next sim tick, so e2e tests must poll after key presses.
 - Physics constants (in `src/sim/constants.ts`): gravity 0.05 px/tick², speed = power × 0.008, wind accel = wind × 0.00012, max speed 40 px/tick per axis. Stage 13 tunes everything.
-- Weapons temporarily use `ItemDef.blast` (radius/damage) in `items.ts`; Stage 5 replaces this with per-weapon behaviors. `DEATH_BLAST` (radius 22, damage 80) is in `round.ts`.
+- All weapon numbers live in `items.ts` (behaviors) and `weapons.ts`/`effects.ts` (laser, dud, death and CRI constants). They're first-pass values for Stage 13 to tune against the original.
+- Effects use the round's RNG (CRI spread, clods, debris, death style, duds), so everything stays deterministic. Test-only overrides: `RoundConfig.dudChance` and `deathStyle`.
 - **Key bindings differ from the original's Ctrl combos** (Ctrl-P/S/Q/M collide with the browser's print, save, quit and so on). They are single keys: P/Esc pause, S sound, Q quit, K mass kill, and the original's Alt fine-step is now Shift.
-- Input events are processed in order within a tick. An overlay opened mid-tick receives the rest, and once it consumes one event the remainder of that tick is dropped (one Esc press both closes and maps to pause).
+- Input events are processed in order within a tick. Each key press is a raw `key` event followed by its mapping. An overlay opened mid-tick receives the following events, and when it consumes a press, only the rest of _that press_ is skipped (one Esc both closes and maps to pause).
 - Sound on/off is a UI flag only until Stage 9.
 - Deaths only resolve after a shot (during settling), so zeroing health by hand mid-aim does nothing until someone fires.
 - **Crumble interpretation:** crumble % is a _per-shot_ chance that all loose ground collapses, not a per-pixel or per-column chance. This matches the manual ("how often loose ground will fall") and gives the Sonic Blaster a clear job. Rolling always consumes RNG, so determinism holds.
@@ -62,12 +71,15 @@ Stage 4 is done: the play screen is feature-complete for keyboard and mouse.
 
 ## Playtest script for current stage
 
-1. `npm run dev`, then open http://localhost:5173 (add `?players=4`). Press F3 to hide the FPS overlay.
-2. HUD: click ◀ ▶ beside Angle and Power (hold to repeat), click the direction arrow to flip, click "Power" (+100, right-click −100), use the wheel over the field, and click FIRE.
-3. Drag on the field from your tank's side: the barrel follows, and distance sets power (dotted preview).
-4. The strip shows dim icons for weapons you don't own. Click the grenade or Lead Ball slot, or press Tab/Shift+Tab; the armed slot turns red and the counts drop as you fire. (All weapons still behave as simple blasts.)
-5. Press 1–9 or click a tank for its status; Esc/P for Game Status; F1 or ? for Controls. Any key or click closes them, and the game is frozen meanwhile.
-6. K then Y: everyone dies after the current shot. Q then Y: the game is aborted and a new round starts. S toggles the sound flag (toast plus the SND button).
+1. `npm run dev`, then open http://localhost:5173/?arsenal&players=3 (try `&crumble=0` and `&walls=on`).
+2. Arm each weapon from the strip (or with Tab) and fire it at the ground between tanks:
+   - Grenade → Incinerator → Mark II → 20 Kt → 5 Mt: growing craters; the nukes flash with a shockwave.
+   - CRI 4/D, 8/D, 20/D: glowing smooth caverns. CRI 8/ND, 20/ND: ragged, lacy holes. Tanks left on overhangs fall if crumble or sonic drops them.
+   - Laser: set power (energy spent) and fire. A beam tunnels through hills and pierces tanks; with walls on it bounces. Below 100 power it refuses.
+   - Sonic Blaster with `crumble=0`: all overhangs collapse anyway.
+   - Dirt balls bury things; Explosive Dirt leaves floating clods (with crumble 100 they fall).
+3. Kill tanks to see the death styles: explosion with burning debris, burial in dirt, fade-out, or a pulsing meltdown with a big blast. `?kills=0` makes the debris harmless.
+4. Rarely, a shell hitting a tank says "DUD!" and flies through. Point-blank full-power shots dud more often.
 
 ## Known issues
 
@@ -76,5 +88,7 @@ Stage 4 is done: the play screen is feature-complete for keyboard and mouse.
 - Column collapse can leave sheer vertical walls at the edges of a collapsed area. That's inherent to the column model and fits the original's look.
 - The dev FPS overlay covers the top-left of the HUD in dev builds (toggle with F3).
 - H/V guidance and shields show in the HUD but do nothing until Stage 7.
+- A CRI 20/D on a full field burns about 30k pixels in roughly 2.3 s. It's fine on desktop; check phones in Stage 10/13.
+- Tanks buried by dirt can still fire, but their shells hit the dirt right away and hurt them, which is deliberate ("death by dirt").
 - The DOM dev panel (F2) still uses a browser font; it gets replaced by the real menu in Stage 6.
 - A fast drag in the lab carves at sampled pointer positions only (gaps possible). It's a debug tool, so this is fine.

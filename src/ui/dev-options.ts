@@ -27,9 +27,10 @@ export class DevOptionsPanel {
       <label>Crumble <input name="crumble" type="range" min="0" max="100" step="5">
         <output name="crumbleOut"></output></label>
       <label><input name="tanksFall" type="checkbox"> Tanks fall</label>
+      <label><input name="explosionsKill" type="checkbox"> Explosions kill</label>
       <label><input name="visibleShot" type="checkbox"> Visible shot</label>
       <label><input name="shotTrail" type="checkbox"> Shot trail</label>
-      <p>Wind, walls, crumble and falling apply from the next round.</p>`;
+      <p>Wind, walls, crumble, falling and kills apply from the next round.</p>`;
     container.appendChild(this.el);
     this.sync();
 
@@ -58,6 +59,7 @@ export class DevOptionsPanel {
     this.field<HTMLInputElement>('crumble').value = String(o.crumble);
     (this.el.elements.namedItem('crumbleOut') as HTMLOutputElement).value = `${o.crumble}%`;
     this.field<HTMLInputElement>('tanksFall').checked = o.tanksFall;
+    this.field<HTMLInputElement>('explosionsKill').checked = o.explosionsKill;
     this.field<HTMLInputElement>('visibleShot').checked = o.visibleShot;
     this.field<HTMLInputElement>('shotTrail').checked = o.shotTrail;
   }
@@ -68,6 +70,7 @@ export class DevOptionsPanel {
       walls: this.field<HTMLSelectElement>('walls').value as WallMode,
       crumble: Number(this.field<HTMLInputElement>('crumble').value),
       tanksFall: this.field<HTMLInputElement>('tanksFall').checked,
+      explosionsKill: this.field<HTMLInputElement>('explosionsKill').checked,
       visibleShot: this.field<HTMLInputElement>('visibleShot').checked,
       shotTrail: this.field<HTMLInputElement>('shotTrail').checked,
     };
