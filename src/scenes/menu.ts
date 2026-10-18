@@ -168,7 +168,7 @@ export class MenuScene implements Scene {
         help: `Opponents include ${AI_NAMES.lobber}, ${AI_NAMES.twanger} and more.`,
       },
     ];
-    this.list = new MenuList(items, 140, 56, 360, 18);
+    this.list = new MenuList(items, 140, 44, 360, 20);
   }
 
   update(): void {
@@ -196,18 +196,15 @@ export class MenuScene implements Scene {
   render(): void {
     const { ctx } = this.app.screen;
     backdrop(ctx);
-    heading(ctx, 'TANK WARS', 10);
-    if (this.message) drawText(ctx, this.message, LOGICAL_WIDTH / 2, 40, UI.accent, 1, 'center');
+    heading(ctx, 'TANK WARS', 5);
+    if (this.message) drawText(ctx, this.message, LOGICAL_WIDTH / 2, 34, UI.accent, 1, 'center');
+    else {
+      const hint = this.app.screen.touch
+        ? 'Tap ◀ ▶ (or the value) to change, tap Start to play'
+        : '↑↓ choose   ←→ or click to change   Enter on Start (or S)';
+      drawText(ctx, hint, LOGICAL_WIDTH / 2, 34, UI.dim, 1, 'center');
+    }
     this.list.draw(ctx);
-    drawText(
-      ctx,
-      '↑↓ choose   ←→ or click to change   Enter on Start (or S)',
-      LOGICAL_WIDTH / 2,
-      384,
-      UI.dim,
-      1,
-      'center',
-    );
   }
 
   dispose(): void {

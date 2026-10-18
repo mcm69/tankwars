@@ -57,6 +57,11 @@ export class TextEntry {
     return true;
   }
 
+  /** Accepts the current text (e.g. when the user taps elsewhere). */
+  commit(): void {
+    this.finish(true);
+  }
+
   private finish(commit: boolean): void {
     const cb = this.done;
     if (!cb) return;

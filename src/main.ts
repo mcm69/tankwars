@@ -1,7 +1,7 @@
 import './style.css';
 import { AI_IDS, type AiId } from './ai/registry';
 import { App } from './app';
-import { LOGICAL_HEIGHT, LOGICAL_WIDTH, TICK_RATE } from './config';
+import { TICK_RATE } from './config';
 import { GameLoop } from './core/loop';
 import { defaultSlots, type PlayerSlot } from './game/settings';
 import { DebugOverlay } from './render/debug-overlay';
@@ -22,6 +22,7 @@ declare global {
       readonly round: Round | undefined;
       readonly overlay: string | null;
       readonly app: App | undefined;
+      readonly touchLayout: Record<string, { x: number; y: number; w: number; h: number }> | null;
     };
   }
 }
@@ -33,7 +34,10 @@ const params = new URLSearchParams(location.search);
 const seedParam = Number(params.get('seed'));
 const seed = Number.isFinite(seedParam) && seedParam ? seedParam : undefined;
 
-const screen = new Screen(container, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+// Touch layout (big side controls) on coarse-pointer devices; ?touch=1 / ?touch=0 overrides.
+const touchParam = params.get('touch');
+const touch = touchParam === null ? matchMedia('(pointer: coarse)').matches : touchParam !== '0';
+const screen = new Screen(container, touch);
 const debug = new DebugOverlay(container);
 
 let ticks = 0;
@@ -103,15 +107,34 @@ window.__tankwars = {
   get app() {
     return app;
   },
+  get touchLayout() {
+    return battle()?.touchLayout ?? null;
+  },
 };
+
+// iOS pinch-zoom gestures aren't covered by touch-action.
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+// Portrait on a touch device shows a "rotate" prompt (CSS); the game holds still meanwhile.
+const portrait = matchMedia('(orientation: portrait) and (pointer: coarse)');
 
 new GameLoop(TICK_RATE, {
   update() {
+    if (portrait.matches) return;
     ticks++;
     update();
   },
   render(alpha) {
+    // Scenes draw in core (640×400) coordinates; the touch layout adds side panels around it.
+    const { ctx } = screen;
+    if (screen.coreOffsetX > 0) {
+      ctx.fillStyle = '#05030a';
+      ctx.fillRect(0, 0, screen.width, screen.height);
+    }
+    ctx.save();
+    ctx.translate(screen.coreOffsetX, 0);
     render(alpha);
+    ctx.restore();
+    app?.renderSides(ctx);
     debug.set('scene', window.__tankwars!.scene);
     debug.set('ticks', ticks);
     debug.frame();

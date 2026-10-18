@@ -1,7 +1,7 @@
 # Status
 
-**Current stage:** Stage 9 — Audio (complete, awaiting review)
-**Next:** Stage 10 — Touch & responsive layout
+**Current stage:** Stage 10 — Touch & responsive layout (complete, awaiting review)
+**Next:** Stage 11 — Persistence
 **Last updated:** 2026-10-18
 
 See [PLAN.md](PLAN.md) for the full stage list. Update this file at the end of every work session
@@ -18,22 +18,23 @@ and at every stage boundary.
 - [x] 6 — Game flow: title, menu, player setup, sets
 - [x] 7 — Economy, shop, guidance & shields
 - [x] 8 — Computer opponents
-- [x] 9 — Audio (awaiting review)
-- [ ] 10 — Touch & responsive layout
+- [x] 9 — Audio
+- [x] 10 — Touch & responsive layout (awaiting review)
 - [ ] 11 — Persistence
 - [ ] 12 — Visual polish & backgrounds
 - [ ] 13 — Balance, QA & release prep
 
 ## Current stage progress
 
-Stage 9 is done: every game event has a synthesized sound, with no audio files.
+Stage 10 is done: the game is fully playable on phones and tablets in landscape.
 
-- **Synth** (`src/audio/synth.ts`): WebAudio enveloped oscillators (square, sine, sawtooth, triangle) with pitch slides, looped white noise through a sweeping biquad filter, sustained voices for the fly sound, and a master gain. It unlocks on the first pointer or key press (browser autoplay rules) and is a silent no-op without WebAudio (tests).
-- **Effects** (`src/audio/sfx.ts`): recipes for fire, explosions (noise boom plus a sub thump that grows with radius), puff, laser zap, CRI Geiger crackle, sonic whine, dirt thud, crumble rumble (a new `crumble` sim event), dud clank, hit blip, shield chime, three death jingles (standard, fade, meltdown alarm), round-over fanfare (or a sad descent), turn chime (human turns only), and UI sounds (move, change, select, back, purchase "ka-ching", error buzz). The `roundEvent` switch is **exhaustive**, so a new sim event without a sound won't compile. Same-kind bursts are throttled (45–120 ms) so debris showers don't roar.
-- **Fly sound**: a triangle whistle that rises and falls with the shell's height. Off by default; Fly sound in the menu.
-- **Settings**: new **Volume** row (0–10, default 7) in the main menu. Sound effects on/off, Fly sound and the in-game **S** / SND button all take effect immediately, because `Sfx` reads settings on every call.
-- Sounds are wired into the battle, title (attract shots), menu, setup, shop and results.
-- Tests: 175 unit tests (new: every event type sounds, laser not doubled, bigger booms are longer and louder, silence when off or at volume 0, volume applied, throttling, UI sounds, fly voice start/follow/stop/mute) + 14 e2e tests (new: the AudioContext runs after a gesture, shots play, S mutes). **Not verified by ear:** how it actually sounds needs your playtest.
+- **Touch layout** (`src/render/screen.ts`): on coarse-pointer devices (or `?touch=1`), the canvas widens to the device's aspect (800–960 logical px) and fills the screen with fractional scaling, with the 640×400 game "core" centered and **side panels** for big buttons. Narrower screens (iPhone SE, 4:3 tablets) letterbox vertically so the panels stay at least 80 px wide. Desktop is unchanged (640 wide, crisp integer scaling). Scenes still draw and hit-test in core coordinates; `Screen.toCanvas` and `toLogical` convert, and scenes can draw into the panels via `renderSides`.
+- **Side controls** (`src/input/touch-controls.ts`, `src/render/touch-panel.ts`): left panel has angle ◀ ▶ and power − + (hold to repeat and accelerate, multi-touch so both can be held), flip, and pause; right panel has a weapon carousel (icon, name, count), H/V guidance (lit when armed), and a big FIRE bar in the player's color, all showing live values. Drag-to-aim on the field and tap-a-tank status already worked through Pointer Events.
+- **Touch-friendly screens**: the Game Status (pause) panel now has **Resume / Controls / Mass kill / Quit** buttons (desktop benefits too); help shows touch controls on touch devices; menu rows are taller; shop −/+ have full-row-height tap targets; menu, setup and shop hints adapt to touch.
+- **Name entry on phones**: name fields open synchronously inside the tap (iOS only shows the keyboard then). The canvas no longer takes focus on mousedown, so a tap's emulated mouse events don't close the keyboard, and tapping elsewhere commits. The hidden input is 16 px so iOS doesn't zoom.
+- **Portrait**: a "turn your device sideways" prompt (CSS media query), and the game pauses until you rotate. Pinch, double-tap zoom, text selection, callouts and tap highlights are suppressed.
+- Robustness: pointer capture is best-effort everywhere (a failed capture used to drop the press).
+- Tests: 178 unit tests (new: touch canvas width, fill scaling, side-panel layout fits with no overlaps) + 20 e2e tests (new mobile suite under iPhone 13 landscape emulation: layout, side buttons, hold-repeat, pause → Quit by touch, tapping a name focuses the field and typing works, portrait prompt pauses and resumes). I checked iPhone 13, iPhone SE and iPad screenshots.
 
 ## Implementation notes
 
@@ -43,7 +44,7 @@ Stage 9 is done: every game event has a synthesized sound, with no audio files.
 - The RNG test pins the first 3 outputs for seed 1991. If the algorithm changes, saves and replays break, so bump the save version.
 - Terrain colors are not stored. They come from position (depth band + hash) at render time, so dirt added by weapons automatically matches.
 - The theme choice uses its own RNG stream (`seed ^ 0x5eed`) so presentation never consumes sim randomness. In Stage 6 the theme becomes part of round setup.
-- `window.__tankwars` is a debug handle (`ticks`, `scene`, `phase`, `round`, `overlay`, `app`) used by e2e tests and the console. `/` opens the title; `?play` jumps into a set (see above); `?lab` opens the terrain lab.
+- `window.__tankwars` is a debug handle (`ticks`, `scene`, `phase`, `round`, `overlay`, `app`, `touchLayout`) used by e2e tests and the console. `/` opens the title; `?play` jumps into a set (see above); `?lab` opens the terrain lab.
 - **Menus are canvas-rendered** (PLAN §2.1 item 6 revised): the widget kit is in `src/ui/widgets.ts`, and `TextEntry` (an off-screen input) handles names. Keys typed before the field takes focus (same tick) are fed in by the scene.
 - Settings (`src/game/settings.ts`) = sim `GameOptions` + sound, volume, fly sound, background, background speed, games per set, players, computers buy. They live in memory for now (persistence is Stage 11). Background and background speed are stored but take effect in Stage 12.
 - Commands are queued by input and applied at the start of the next sim tick, so e2e tests must poll after key presses.
@@ -66,11 +67,12 @@ Stage 9 is done: every game event has a synthesized sound, with no audio files.
 
 ## Playtest script for current stage
 
-1. `npm run dev`. Sound starts after your first key or click (browser rule). The title's attract shots are audible once you come back to it.
-2. Menu: moving and changing options blip. Set Volume (try 3 and 10) and turn Fly sound on.
-3. http://localhost:5173/?play&arsenal&players=3: fire each weapon and listen (incinerator vs nukes, laser zap, CRI crackle, sonic whine, dirt thud, crumble rumble). Get hit with and without a shield (chime vs blip) and kill tanks (death jingles, the meltdown alarm), then end the round (fanfare).
-4. Press **S** (or click SND) mid-game: silence, and S again brings it back. With Fly sound on, the shell whistles higher as it climbs.
-5. In the shop, adding items blips, being too poor buzzes, and Purchase goes "ka-ching".
+1. On a phone or tablet on the same network, run `npm run dev -- --host` and open the shown URL (or use desktop Chrome DevTools device mode, or `?touch=1` to force the touch layout).
+2. Portrait shows the rotate prompt; landscape shows the game with side panels.
+3. Title → tap. Menu: tap ◀ ▶ or values. Setup: tap a name (the keyboard appears), type, tap elsewhere; tap Human/CPU and the personality.
+4. In battle: drag on the field to aim, or hold the ◀ ▶ / − + buttons. Use the weapon arrows, H/V, and FIRE. Tap a tank for its status. ‖ opens Game Status with Resume / Controls / Mass kill / Quit.
+5. Shop between games: tap rows or + to add, − to remove, Done.
+6. Desktop should look and play exactly as before.
 
 ## Known issues
 
@@ -78,6 +80,8 @@ Stage 9 is done: every game event has a synthesized sound, with no audio files.
 - While the desktop app's browser pane is hidden, rAF stops entirely. That's a pane artifact, not a game bug. Use headless Playwright for visual checks (see WORKING_NOTES).
 - Column collapse can leave sheer vertical walls at the edges of a collapsed area. That's inherent to the column model and fits the original's look.
 - The dev FPS overlay covers the top-left of the HUD in dev builds (toggle with F3).
+- On phones the core HUD's small buttons and strip are still tappable but small; the side panels are the intended touch controls. Strip slot taps arm weapons, though the weapon carousel is easier.
+- I haven't tried a real iOS/Android device; it's verified with Chromium mobile emulation only (WebKit isn't installed for Playwright).
 - AI quirks are deliberate: Lobber and Lob & Shoot flounder with bouncing walls; Windless Wit repeats wind-blind misses; Rifleman is harmless unless you're above him.
 - The Background and Background speed menu options are stored but not rendered until Stage 12; sound options wait for Stage 9.
 - A CRI 20/D on a full field burns about 30k pixels in roughly 2.3 s. It's fine on desktop; check phones in Stage 10/13.

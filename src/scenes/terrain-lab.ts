@@ -1,5 +1,6 @@
-import { LAYOUT } from '../config';
+import { LAYOUT, LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../config';
 import { Rng } from '../core/rng';
+import { capturePointer } from '../input/events';
 import type { DebugOverlay } from '../render/debug-overlay';
 import type { Screen } from '../render/screen';
 import { renderSky, TerrainRenderer } from '../render/terrain-renderer';
@@ -62,7 +63,7 @@ export class TerrainLab {
     this.renderer.update(this.terrain);
 
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, this.screen.width, this.screen.height);
+    ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
     // HUD placeholder until Stage 4.
     ctx.fillStyle = '#1a1424';
@@ -106,7 +107,7 @@ export class TerrainLab {
     };
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     canvas.addEventListener('pointerdown', (e) => {
-      canvas.setPointerCapture(e.pointerId);
+      capturePointer(canvas, e.pointerId);
       const fill = e.button === 2 || e.shiftKey;
       this.pointer = { ...toField(e), mode: fill ? 'fill' : 'carve' };
       // Apply immediately so a quick click registers even between ticks.

@@ -132,4 +132,8 @@ export class App {
   render(alpha: number): void {
     this.scene.render(alpha);
   }
+
+  renderSides(ctx: CanvasRenderingContext2D): void {
+    if (this.screen.sideWidth > 0) this.scene.renderSides?.(ctx);
+  }
 }

@@ -34,8 +34,22 @@ export class SetupScene implements Scene {
   private editing = -1;
   private ticks = 0;
 
+  private readonly abort = new AbortController();
+
   constructor(private readonly app: App) {
     this.input = new UiInput(app.screen);
+    // Name fields open on pointerup, synchronously inside the tap: iOS only shows the
+    // on-screen keyboard when the input is focused from the user's gesture itself.
+    app.screen.canvas.addEventListener(
+      'pointerup',
+      (e) => {
+        const p = app.screen.toLogical(e.clientX, e.clientY);
+        for (let i = 0; i < this.count; i++) {
+          if (inside(NAME_RECT(i), p.x, p.y) && this.editing !== i) this.editName(i);
+        }
+      },
+      { signal: this.abort.signal },
+    );
   }
 
   private get count(): number {
@@ -77,8 +91,11 @@ export class SetupScene implements Scene {
     for (const e of this.input.poll()) {
       if (!this.entry.active) this.uiSound(e);
       if (this.entry.active) {
-        // Keys that beat the field's focus go into it; clicking elsewhere commits (via blur).
+        // Keys that beat the field's focus go into it; tapping anywhere else commits.
         if (e.type === 'key') this.entry.feed(e.key);
+        else if (e.type === 'click' && !inside(NAME_RECT(this.editing), e.x, e.y)) {
+          this.entry.commit();
+        }
         continue;
       }
       if (e.type === 'key') {
@@ -125,8 +142,8 @@ export class SetupScene implements Scene {
           return;
         }
         for (let i = 0; i < this.count; i++) {
-          if (inside(NAME_RECT(i), e.x, e.y)) this.editName(i);
-          else if (inside(TYPE_RECT(i), e.x, e.y)) {
+          if (inside(NAME_RECT(i), e.x, e.y)) continue; // handled on pointerup (see constructor)
+          if (inside(TYPE_RECT(i), e.x, e.y)) {
             this.selected = i;
             this.setKind(i, this.slot(i).kind === 'human' ? 'computer' : 'human');
           } else if (inside(AI_RECT(i), e.x, e.y)) {
@@ -207,7 +224,9 @@ export class SetupScene implements Scene {
     });
     drawText(
       ctx,
-      '↑↓ row  Enter name  H human  C computer  ←→ personality  S start  Esc back',
+      this.app.screen.touch
+        ? 'Tap a name to edit it, the type to switch, the personality to cycle'
+        : '↑↓ row  Enter name  H human  C computer  ←→ personality  S start  Esc back',
       LOGICAL_WIDTH / 2,
       386,
       UI.dim,
@@ -217,6 +236,7 @@ export class SetupScene implements Scene {
   }
 
   dispose(): void {
+    this.abort.abort();
     this.input.dispose();
     this.entry.dispose();
   }

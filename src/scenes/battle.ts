@@ -1,11 +1,13 @@
 import { planTurn, type AiMemory, type AiPlan } from '../ai/registry';
 import type { App } from '../app';
-import { LAYOUT } from '../config';
+import { LAYOUT, LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../config';
 import { Rng } from '../core/rng';
 import type { GameSet } from '../game/set';
 import type { InputEvent, UiAction } from '../input/events';
 import { KeyboardController } from '../input/keyboard';
 import { PointerController } from '../input/pointer';
+import { TouchControls } from '../input/touch-controls';
+import { drawTouchPanels } from '../render/touch-panel';
 import { BattleRenderer } from '../render/battle-renderer';
 import { drawHud } from '../render/hud';
 import {
@@ -13,6 +15,7 @@ import {
   drawToasts,
   overlayHitTest,
   type Overlay,
+  type PauseAction,
   type Toast,
 } from '../render/overlays';
 import { darken, PLAYER_COLORS } from '../render/tank-sprite';
@@ -52,6 +55,8 @@ export class BattleScene implements Scene {
   private readonly renderer = new BattleRenderer();
   private readonly keyboard = new KeyboardController();
   private readonly pointer: PointerController;
+  /** Side-panel touch buttons, in the touch layout only. */
+  private readonly touch: TouchControls | null;
   private readonly aiRng: Rng;
   private overlay: Overlay | null = null;
   private toasts: Toast[] = [];
@@ -70,6 +75,8 @@ export class BattleScene implements Scene {
       () => this.round,
       () => this.overlay !== null,
     );
+    this.touch =
+      app.screen.sideWidth > 0 ? new TouchControls(app.screen, () => this.overlay !== null) : null;
     const seed = set.roundSeed();
     // Presentation and AI use their own streams so they never perturb the round's RNG.
     const theme = new Rng(seed ^ 0x5eed).pick(THEMES);
@@ -88,6 +95,10 @@ export class BattleScene implements Scene {
     return this.overlay;
   }
 
+  get touchLayout(): TouchControls['layout'] | null {
+    return this.touch?.layout ?? null;
+  }
+
   private isHumanTurn(): boolean {
     const t = this.round.current;
     return !!t && this.set.players[t.id]?.kind === 'human';
@@ -99,7 +110,7 @@ export class BattleScene implements Scene {
   }
 
   update(): void {
-    const events = [...this.keyboard.poll(), ...this.pointer.poll()];
+    const events = [...this.keyboard.poll(), ...this.pointer.poll(), ...(this.touch?.poll() ?? [])];
     for (const t of this.toasts) t.ticks--;
     this.toasts = this.toasts.filter((t) => t.ticks > 0);
 
@@ -231,7 +242,14 @@ export class BattleScene implements Scene {
         answer = 'dismiss';
       }
     } else if (e.kind === 'overlayClick') {
-      answer = o.kind === 'confirm' ? overlayHitTest(o, e.x, e.y) : 'dismiss';
+      if (o.kind === 'pause') {
+        const action = overlayHitTest(o, e.x, e.y);
+        if (action && action !== 'yes' && action !== 'no') return this.pauseAction(action);
+        answer = 'dismiss';
+      } else {
+        const hit = o.kind === 'confirm' ? overlayHitTest(o, e.x, e.y) : 'dismiss';
+        answer = hit === 'yes' || hit === 'no' || hit === 'dismiss' ? hit : null;
+      }
     }
     if (!answer) return false;
     this.overlay = null;
@@ -243,6 +261,16 @@ export class BattleScene implements Scene {
     } else {
       this.app.abortSet();
     }
+    return true;
+  }
+
+  /** Buttons on the Game Status panel (touch players have no K/Q keys). */
+  private pauseAction(action: PauseAction): boolean {
+    this.overlay = null;
+    if (action === 'help') this.overlay = { kind: 'help' };
+    else if (action === 'massKill' && this.round.phase !== 'roundOver') {
+      this.overlay = { kind: 'confirm', what: 'massKill' };
+    } else if (action === 'quit') this.overlay = { kind: 'confirm', what: 'quit' };
     return true;
   }
 
@@ -333,13 +361,13 @@ export class BattleScene implements Scene {
   }
 
   render(alpha: number): void {
-    const { ctx, width, height } = this.app.screen;
+    const { ctx } = this.app.screen;
     const { field } = LAYOUT;
     const round = this.round;
     this.terrainRenderer.update(round.terrain);
 
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
     drawHud(ctx, round, {
       soundOn: this.app.settings.sound,
       hover: this.overlay ? null : this.pointer.hover,
@@ -375,6 +403,7 @@ export class BattleScene implements Scene {
         totalRounds: this.set.totalRounds,
         soundOn: this.app.settings.sound,
         tickCount: this.round.tickCount,
+        touch: this.app.screen.touch,
       });
     }
 
@@ -385,9 +414,24 @@ export class BattleScene implements Scene {
     this.app.debug.set('phase', round.phase);
   }
 
+  renderSides(ctx: CanvasRenderingContext2D): void {
+    if (!this.touch) return;
+    const enabled = this.round.phase === 'aiming' && this.isHumanTurn() && !this.overlay;
+    drawTouchPanels(
+      ctx,
+      this.touch.layout,
+      this.touch.pressed,
+      this.round,
+      enabled,
+      this.app.screen.sideWidth,
+      this.app.screen.width,
+    );
+  }
+
   dispose(): void {
     this.keyboard.dispose();
     this.pointer.dispose();
+    this.touch?.dispose();
   }
 }
 

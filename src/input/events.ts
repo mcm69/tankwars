@@ -29,3 +29,15 @@ export const HOLD_DELAY = 15;
 export function repeatStep(ticks: number): number {
   return ticks > 90 ? 10 : ticks > 45 ? 4 : 1;
 }
+
+/**
+ * Captures a pointer so its moves/release reach the canvas even off it. Best effort: capture
+ * can fail (e.g. the pointer is already gone), which must never swallow the press itself.
+ */
+export function capturePointer(el: Element, pointerId: number): void {
+  try {
+    el.setPointerCapture(pointerId);
+  } catch {
+    /* not capturable: fine */
+  }
+}

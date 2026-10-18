@@ -33,6 +33,15 @@ const plusRect = (k: number): Rect => {
   const r = rowRect(k);
   return { x: r.x + 262, y: r.y + 5, w: 16, h: 16 };
 };
+/** Generous tap targets around the small −/+ buttons (full row height). */
+const minusHit = (k: number): Rect => {
+  const r = rowRect(k);
+  return { x: r.x + 196, y: r.y, w: 42, h: r.h };
+};
+const plusHit = (k: number): Rect => {
+  const r = rowRect(k);
+  return { x: r.x + 250, y: r.y, w: 42, h: r.h };
+};
 
 const INPUT_GRACE_TICKS = 15;
 const money = (n: number) => `$${n.toLocaleString('en-US')}`;
@@ -136,8 +145,8 @@ export class ShopScene implements Scene {
         if (inside(PURCHASE_RECT, e.x, e.y)) this.buy();
         else if (inside(DONE_RECT, e.x, e.y)) return this.done(true);
         for (let k = 0; k < n; k++) {
-          if (inside(minusRect(k), e.x, e.y)) this.add(k, -1);
-          else if (inside(plusRect(k), e.x, e.y)) this.add(k, 1);
+          if (inside(minusHit(k), e.x, e.y)) this.add(k, -1);
+          else if (inside(plusHit(k), e.x, e.y)) this.add(k, 1);
           // Clicking the row itself: left adds, right removes.
           else if (inside(rowRect(k), e.x, e.y)) this.add(k, e.button === 2 ? -1 : 1);
         }
@@ -218,7 +227,9 @@ export class ShopScene implements Scene {
       drawTextShadow(ctx, this.flash.text, LOGICAL_WIDTH / 2, 366, '#ffffff', 1, 'center');
     drawText(
       ctx,
-      'arrows select  + add  - remove  P purchase  D done  Esc leave',
+      this.app.screen.touch
+        ? 'Tap a row or + to add, - to remove, then Done'
+        : 'arrows select  + add  - remove  P purchase  D done  Esc leave',
       LOGICAL_WIDTH / 2,
       386,
       UI.dim,

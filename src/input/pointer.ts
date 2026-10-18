@@ -5,7 +5,7 @@ import { GUIDANCE_H, GUIDANCE_V, WEAPON_COUNT } from '../sim/items';
 import type { Command, Round } from '../sim/round';
 import { hitsTank, maxPower, TURRET_PIVOT } from '../sim/tank';
 import { aimFromPointer } from './aim';
-import { HOLD_DELAY, repeatStep, type InputEvent } from './events';
+import { capturePointer, HOLD_DELAY, repeatStep, type InputEvent } from './events';
 
 /** Pixels a press may move and still count as a click (not a drag). */
 const CLICK_SLOP = 4;
@@ -81,11 +81,12 @@ export class PointerController {
 
   private down(e: PointerEvent): void {
     const { x, y } = this.logical(e);
-    this.screen.canvas.setPointerCapture(e.pointerId);
+    capturePointer(this.screen.canvas, e.pointerId);
     if (this.overlayOpen()) {
       this.queue.push({ kind: 'overlayClick', x, y });
       return;
     }
+    if (!this.screen.inCore(x, y)) return; // the touch side panels handle their own taps
     this.queue.push({ kind: 'click', x, y });
     const id = hudHitTest(x, y);
     if (id) {

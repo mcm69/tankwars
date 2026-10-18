@@ -21,6 +21,8 @@ export interface OverlayContext {
   totalRounds: number;
   soundOn: boolean;
   tickCount: number;
+  /** Touch layout: help shows touch controls instead of mouse ones. */
+  touch: boolean;
 }
 
 export interface Toast {
@@ -88,10 +90,42 @@ export function confirmButtons(): { yes: Rect; no: Rect } {
   };
 }
 
-export function overlayHitTest(o: Overlay, x: number, y: number): 'yes' | 'no' | null {
+const PAUSE_W = 340;
+const PAUSE_H = 206;
+
+export type PauseAction = 'resume' | 'help' | 'massKill' | 'quit';
+const PAUSE_ACTIONS: readonly [PauseAction, string][] = [
+  ['resume', 'Resume'],
+  ['help', 'Controls'],
+  ['massKill', 'Mass kill'],
+  ['quit', 'Quit'],
+];
+
+/** The Game Status panel's buttons (so touch players can reach every command). */
+export function pauseButtons(): Record<PauseAction, Rect> {
+  const { field } = LAYOUT;
+  const left = Math.round(field.x + (field.w - PAUSE_W) / 2) + 10;
+  const y = Math.round(field.y + (field.h - PAUSE_H) / 2) + PAUSE_H - 46;
+  const w = (PAUSE_W - 20 - 3 * 6) / 4;
+  const out = {} as Record<PauseAction, Rect>;
+  PAUSE_ACTIONS.forEach(
+    ([id], i) => (out[id] = { x: Math.round(left + i * (w + 6)), y, w: Math.floor(w), h: 24 }),
+  );
+  return out;
+}
+
+export function overlayHitTest(
+  o: Overlay,
+  x: number,
+  y: number,
+): 'yes' | 'no' | PauseAction | null {
+  const inside = (r: Rect) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+  if (o.kind === 'pause') {
+    const hit = Object.entries(pauseButtons()).find(([, r]) => inside(r));
+    return (hit?.[0] as PauseAction | undefined) ?? null;
+  }
   if (o.kind !== 'confirm') return null;
   const { yes, no } = confirmButtons();
-  const inside = (r: Rect) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
   return inside(yes) ? 'yes' : inside(no) ? 'no' : null;
 }
 
@@ -100,7 +134,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, o: Overlay, c: Overla
     case 'pause':
       return drawPause(ctx, c);
     case 'help':
-      return drawHelp(ctx);
+      return drawHelp(ctx, c.touch);
     case 'status':
       return drawStatus(ctx, c.round, o.tankId);
     case 'confirm':
@@ -146,7 +180,7 @@ function drawPause(
   ctx: CanvasRenderingContext2D,
   { round, roundNumber, totalRounds, soundOn }: OverlayContext,
 ) {
-  const r = panel(ctx, 340, 172, 'Game Status');
+  const r = panel(ctx, PAUSE_W, PAUSE_H, 'Game Status');
   const o = round.options;
   const wind = `${o.wind === 'random' ? `random (${round.windLevel})` : o.wind}, now ${Math.abs(round.wind)}${round.wind > 0 ? '→' : round.wind < 0 ? '←' : ''}`;
   rows(
@@ -167,7 +201,16 @@ function drawPause(
     ],
     110,
   );
-  footer(ctx, r, 'Paused. Press any key or click to continue.');
+  const buttons = pauseButtons();
+  for (const [id, label] of PAUSE_ACTIONS) {
+    const b = buttons[id];
+    ctx.fillStyle = id === 'resume' ? '#2a6a3a' : id === 'help' ? '#3a2f52' : '#7a1c2a';
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = '#ffffff';
+    ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+    drawText(ctx, label, b.x + b.w / 2, b.y + 8, '#ffffff', 1, 'center');
+  }
+  footer(ctx, r, 'Paused. Press any key or tap outside the buttons to continue.');
 }
 
 const HELP_KEYS: readonly (readonly [string, string])[] = [
@@ -186,6 +229,15 @@ const HELP_KEYS: readonly (readonly [string, string])[] = [
   ['Q', 'quit game (asks first)'],
 ];
 
+const HELP_TOUCH: readonly string[] = [
+  'Drag on the field to aim: direction',
+  'from your turret, distance = power.',
+  'Side buttons: ◀ ▶ angle, - + power',
+  '(hold repeats), weapon ◀ ▶, H V, FIRE.',
+  'Tap a tank for its status.',
+  'Pause (||) has Mass kill and Quit.',
+];
+
 const HELP_MOUSE: readonly string[] = [
   'Drag on the field to aim: direction',
   'from your turret, distance = power.',
@@ -195,11 +247,13 @@ const HELP_MOUSE: readonly string[] = [
   'Click any tank for its status.',
 ];
 
-function drawHelp(ctx: CanvasRenderingContext2D): void {
+function drawHelp(ctx: CanvasRenderingContext2D, touch: boolean): void {
   const r = panel(ctx, 580, 210, 'Controls');
   rows(ctx, r.x + 16, r.y + 30, HELP_KEYS, 90);
-  drawText(ctx, 'Mouse', r.x + 334, r.y + 30, LABEL);
-  HELP_MOUSE.forEach((line, i) => drawText(ctx, line, r.x + 334, r.y + 44 + i * 12, TEXT));
+  drawText(ctx, touch ? 'Touch' : 'Mouse', r.x + 334, r.y + 30, LABEL);
+  (touch ? HELP_TOUCH : HELP_MOUSE).forEach((line, i) =>
+    drawText(ctx, line, r.x + 334, r.y + 44 + i * 12, TEXT),
+  );
   footer(ctx, r, 'Press any key or click to close.');
 }
 
