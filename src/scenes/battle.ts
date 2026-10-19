@@ -19,7 +19,9 @@ import {
   type Toast,
 } from '../render/overlays';
 import { darken, PLAYER_COLORS } from '../render/tank-sprite';
-import { renderSky, TerrainRenderer } from '../render/terrain-renderer';
+import { BackgroundLayer, resolveBackground } from '../render/backgrounds';
+import { effectiveBackgroundSpeed, motionReduced } from '../render/motion';
+import { TerrainRenderer } from '../render/terrain-renderer';
 import { THEMES } from '../render/themes';
 import { TrailLayer } from '../render/trail-layer';
 import { GUIDANCE_H, GUIDANCE_V, ITEMS, LEAD_BALL } from '../sim/items';
@@ -49,10 +51,10 @@ const ROUND_OVER_AUTO_TICKS = 150;
  */
 export class BattleScene implements Scene {
   readonly name = 'battle';
-  private readonly sky: HTMLCanvasElement;
+  private readonly background: BackgroundLayer;
   private readonly terrainRenderer: TerrainRenderer;
   private readonly trails = new TrailLayer(LAYOUT.field.w, LAYOUT.field.h);
-  private readonly renderer = new BattleRenderer();
+  private readonly renderer: BattleRenderer;
   private readonly keyboard = new KeyboardController();
   private readonly pointer: PointerController;
   /** Side-panel touch buttons, in the touch layout only. */
@@ -64,6 +66,7 @@ export class BattleScene implements Scene {
   private aiPlan: AiPlan | null = null;
   private readonly aiMemory = new Map<number, AiMemory>();
   private overTicks = 0;
+  private backgroundSpeed = 0;
 
   constructor(
     private readonly app: App,
@@ -79,16 +82,30 @@ export class BattleScene implements Scene {
       app.screen.sideWidth > 0 ? new TouchControls(app.screen, () => this.overlay !== null) : null;
     const seed = set.roundSeed();
     // Presentation and AI use their own streams so they never perturb the round's RNG.
-    const theme = new Rng(seed ^ 0x5eed).pick(THEMES);
+    const look = new Rng(seed ^ 0x5eed);
+    const theme = look.pick(THEMES);
     this.aiRng = new Rng(seed ^ 0xa1);
     const { w, h } = LAYOUT.field;
-    this.sky = renderSky(w, h, theme);
+    const bg = resolveBackground(app.settings.background, look);
+    this.background = new BackgroundLayer(bg, w, h, theme, seed ^ 0xb6);
+    this.renderer = new BattleRenderer(new Rng(seed ^ 0xf8));
+    this.applyMotionSettings();
     this.terrainRenderer = new TerrainRenderer(w, h, theme);
   }
 
   /** Read-only views for tests and debugging. */
   get state(): Round {
     return this.round;
+  }
+
+  /** What the presentation is doing, for tests: sky, its effective speed, motion flags. */
+  get visuals() {
+    return {
+      background: this.background.kind,
+      backgroundSpeed: this.backgroundSpeed,
+      reducedMotion: this.renderer.reducedMotion,
+      shakeEnabled: this.renderer.shakeEnabled && !this.renderer.reducedMotion,
+    };
   }
 
   get openOverlay(): Overlay | null {
@@ -109,7 +126,18 @@ export class BattleScene implements Scene {
     if (this.toasts.length > 3) this.toasts.shift();
   }
 
+  /** Picks up motion settings (they can change mid-game, e.g. the OS preference). */
+  private applyMotionSettings(): void {
+    const settings = this.app.settings;
+    this.renderer.reducedMotion = motionReduced(settings);
+    this.renderer.shakeEnabled = settings.screenShake;
+    if (!this.renderer.shakeEnabled || this.renderer.reducedMotion) this.renderer.shake.reset();
+    this.backgroundSpeed = effectiveBackgroundSpeed(settings);
+  }
+
   update(): void {
+    this.applyMotionSettings();
+    this.background.tick(this.backgroundSpeed);
     const events = [...this.keyboard.poll(), ...this.pointer.poll(), ...(this.touch?.poll() ?? [])];
     for (const t of this.toasts) t.ticks--;
     this.toasts = this.toasts.filter((t) => t.ticks > 0);
@@ -166,7 +194,7 @@ export class BattleScene implements Scene {
         this.toast('Laser needs 100+ energy: raise power', '#ff9a6a');
       }
     }
-    this.renderer.tick();
+    this.renderer.tick(this.round);
 
     const p = this.round.projectile;
     if (p && this.set.settings.shotTrail) {
@@ -379,7 +407,10 @@ export class BattleScene implements Scene {
     ctx.rect(field.x, field.y, field.w, field.h);
     ctx.clip();
     ctx.translate(field.x, field.y);
-    ctx.drawImage(this.sky, 0, 0);
+    this.background.draw(ctx);
+    // Shake moves everything on the field except the sky, which reads as distant.
+    const { shake } = this.renderer;
+    ctx.translate(shake.x, shake.y);
     ctx.drawImage(this.trails.canvas, 0, 0);
     ctx.drawImage(this.terrainRenderer.canvas, 0, 0);
     this.renderer.drawField(
@@ -411,6 +442,8 @@ export class BattleScene implements Scene {
       'round',
       `${this.set.roundsPlayed + 1}/${this.set.totalRounds} (${round.terrainStyle})`,
     );
+    this.app.debug.set('sky', this.background.kind);
+    this.app.debug.set('fx', String(this.renderer.particles.count));
     this.app.debug.set('phase', round.phase);
   }
 

@@ -4,6 +4,7 @@ import { LOGICAL_WIDTH } from '../config';
 import { UiInput, type UiEvent } from '../input/ui-input';
 import { drawText } from '../render/font';
 import { BACKGROUND_NAMES, BACKGROUNDS, MAX_PLAYERS, type Settings } from '../game/settings';
+import { systemPrefersReducedMotion } from '../render/motion';
 import { WIND_LEVELS } from '../sim/options';
 import { backdrop, heading, MenuList, UI, type MenuItem } from '../ui/widgets';
 import type { Scene } from './scene';
@@ -44,6 +45,7 @@ export class MenuScene implements Scene {
             | 'tanksFall'
             | 'explosionsKill'
             | 'computersBuy'
+            | 'screenShake'
           ),
       ) =>
       () => {
@@ -117,7 +119,7 @@ export class MenuScene implements Scene {
         value: () => BACKGROUND_NAMES[s().background],
         change: (d) =>
           (app.settings = { ...s(), background: cycle(BACKGROUNDS, s().background, d) }),
-        help: 'Animated skies (coming in a later stage).',
+        help: 'The sky behind the battle. Random picks one each game.',
       },
       {
         id: 'backgroundSpeed',
@@ -126,6 +128,29 @@ export class MenuScene implements Scene {
         change: (d) =>
           (app.settings = { ...s(), backgroundSpeed: step(s().backgroundSpeed, d, 0, 10) }),
         help: 'How fast the background animates.',
+      },
+      {
+        id: 'motion',
+        label: 'Reduce motion',
+        value: () =>
+          ({
+            auto: systemPrefersReducedMotion() ? 'Auto (on)' : 'Auto (off)',
+            full: 'Off',
+            reduced: 'On',
+          })[s().motion],
+        change: (d) =>
+          (app.settings = {
+            ...s(),
+            motion: cycle(['auto', 'reduced', 'full'] as const, s().motion, d),
+          }),
+        help: 'Stills the sky, stops shaking, dims flashes. Auto follows your system.',
+      },
+      {
+        id: 'screenShake',
+        label: 'Screen shake',
+        value: () => onOff(s().screenShake),
+        change: toggle('screenShake'),
+        help: 'Big explosions rattle the battlefield.',
       },
       {
         id: 'gamesPerSet',

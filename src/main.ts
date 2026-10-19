@@ -3,7 +3,7 @@ import { AI_IDS, type AiId } from './ai/registry';
 import { App } from './app';
 import { TICK_RATE } from './config';
 import { GameLoop } from './core/loop';
-import { defaultSlots, type PlayerSlot } from './game/settings';
+import { BACKGROUNDS, defaultSlots, type Background, type PlayerSlot } from './game/settings';
 import { DebugOverlay } from './render/debug-overlay';
 import { Screen } from './render/screen';
 import { BattleScene } from './scenes/battle';
@@ -22,6 +22,7 @@ declare global {
       readonly round: Round | undefined;
       readonly overlay: string | null;
       readonly app: App | undefined;
+      readonly visuals: BattleScene['visuals'] | null;
       readonly touchLayout: Record<string, { x: number; y: number; w: number; h: number }> | null;
     };
   }
@@ -56,7 +57,7 @@ if (params.has('lab')) {
   if (params.has('play')) {
     // ?play skips the title and menus: ?players=N, ?cpu=N (last N players are computers),
     // ?ai=lobber (their personality; default random),
-    // ?games=N, ?seed=N, ?arsenal, ?money=N, plus option params like ?wind=none&walls=on&crumble=100.
+    // ?games=N, ?seed=N, ?arsenal, ?money=N, ?bg=stars&bgspeed=N, plus option params like ?wind=none&walls=on&crumble=100.
     const players = Math.min(10, Math.max(2, Number(params.get('players')) || 2));
     const cpu = Math.min(players, Math.max(0, Number(params.get('cpu')) || 0));
     const aiParam = params.get('ai');
@@ -72,6 +73,12 @@ if (params.has('lab')) {
         ...optionsFromParams(params),
         players,
         gamesPerSet: Math.min(99, Math.max(1, Number(params.get('games')) || 99)),
+        ...(BACKGROUNDS.includes(params.get('bg') as Background)
+          ? { background: params.get('bg') as Background }
+          : {}),
+        ...(params.has('bgspeed')
+          ? { backgroundSpeed: Math.min(10, Math.max(0, Number(params.get('bgspeed')) || 0)) }
+          : {}),
       },
       slots,
       ...(seed !== undefined ? { seed } : {}),
@@ -106,6 +113,9 @@ window.__tankwars = {
   },
   get app() {
     return app;
+  },
+  get visuals() {
+    return battle()?.visuals ?? null;
   },
   get touchLayout() {
     return battle()?.touchLayout ?? null;

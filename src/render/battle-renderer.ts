@@ -1,8 +1,11 @@
 import { LAYOUT } from '../config';
+import type { Rng } from '../core/rng';
 import { itemIndex } from '../sim/items';
 import { SHIELD_COST_PER_DAMAGE, type Round, type RoundEvent } from '../sim/round';
 import { BARREL_LENGTH, TANK_HALF_WIDTH, TURRET_PIVOT } from '../sim/tank';
 import { drawText, drawTextShadow } from './font';
+import { Shake, shakeForRadius } from './motion';
+import { Particles } from './particles';
 import { drawPixelLine, fillPixelCircle, strokePixelCircle } from './pixels';
 import { lighten, PLAYER_COLORS, SPRITE_HEIGHT, tankSprite } from './tank-sprite';
 
@@ -12,6 +15,11 @@ const PUFF_COLORS = ['#ffffff', '#d8d8e0', '#a8a8b8', '#787888'];
 const CRI_COLORS = ['#ffffff', '#d4ff6a', '#6aff8a'];
 /** Explosions this big get a flash and shockwave ring. */
 const NUKE_RADIUS = 55;
+/** Turret angles further than this from the sim's ease toward it instead of snapping. */
+const TURRET_SNAP = 3;
+const TURRET_EASE = 0.4;
+/** Falls shorter than this don't kick up dust. */
+const DUST_MIN_DROP = 3;
 
 interface Floater {
   x: number;
@@ -29,10 +37,29 @@ export class BattleRenderer {
   private floaters: Floater[] = [];
   /** Ticks left of a shield flash, per tank. */
   private readonly flashes = new Map<number, number>();
+  readonly particles: Particles;
+  readonly shake = new Shake();
+  /** Set by the scene each frame from the settings. */
+  shakeEnabled = true;
+  reducedMotion = false;
+  /** Drawn turret angle per tank, easing toward the sim's angle. */
+  private readonly turret = new Map<number, number>();
+  private readonly lastY = new Map<number, number>();
+  /** y where each falling tank started, for landing dust. */
+  private readonly fallFrom = new Map<number, number>();
+
+  constructor(rng: Rng) {
+    this.particles = new Particles(rng);
+  }
 
   /** Feed sim events to spawn presentation-only effects. */
   onEvents(round: Round, events: readonly RoundEvent[]): void {
     for (const e of events) {
+      if (e.type === 'explode' && !e.harmless) {
+        this.particles.explosion(e.x, e.y, e.radius);
+        this.kick(shakeForRadius(e.radius));
+      }
+      if (e.type === 'tankDied') this.kick(e.style === 'meltdown' ? 5 : 2);
       if (e.type === 'shieldHit') {
         const t = round.tanks[e.tankId]!;
         this.flashes.set(t.id, 12);
@@ -59,6 +86,10 @@ export class BattleRenderer {
         });
       }
     }
+  }
+
+  private kick(pixels: number): void {
+    if (this.shakeEnabled && !this.reducedMotion && pixels > 0) this.shake.kick(pixels);
   }
 
   /** Field-space drawing; the caller has translated the context to the field origin. */
@@ -154,7 +185,9 @@ export class BattleRenderer {
       this.drawTracking(ctx, px, py, round.terrain.width);
     }
 
+    this.particles.drawBehind(ctx, alpha);
     this.drawEffects(ctx, round, alpha);
+    this.particles.drawFront(ctx, alpha);
 
     for (const f of this.floaters) {
       drawTextShadow(ctx, f.text, f.x, f.y - f.age / 3, f.color, 1, 'center');
@@ -169,7 +202,7 @@ export class BattleRenderer {
     const x = Math.round(t.x);
     const y = Math.round(t.y);
     const color = override ?? PLAYER_COLORS[t.color]!;
-    const a = (t.angle * Math.PI) / 180;
+    const a = ((this.turret.get(t.id) ?? t.angle) * Math.PI) / 180;
     ctx.fillStyle = lighten(color, 0.2);
     drawPixelLine(
       ctx,
@@ -212,7 +245,9 @@ export class BattleRenderer {
         ctx.fillStyle = 'rgb(255 255 230 / 60%)';
         strokePixelCircle(ctx, e.x, e.y, e.radius * Math.min(1.8, (e.age + alpha) / 8));
         if (e.age < 4) {
-          ctx.fillStyle = `rgb(255 255 255 / ${0.7 - e.age * 0.15})`;
+          // Reduced motion keeps the flash, but dim, for photosensitive players.
+          const peak = this.reducedMotion ? 0.2 : 0.7;
+          ctx.fillStyle = `rgb(255 255 255 / ${peak - e.age * peak * 0.2})`;
           ctx.fillRect(0, 0, width, round.terrain.height);
         }
       }
@@ -220,6 +255,11 @@ export class BattleRenderer {
       fillPixelCircle(ctx, e.x, e.y, r);
       ctx.fillStyle = colors[ci]!;
       fillPixelCircle(ctx, e.x, e.y, r * 0.6);
+      if (!e.harmless && e.age < 3) {
+        // A hot white flash, a little larger than the fireball, for the first frames.
+        ctx.fillStyle = `rgb(255 255 240 / ${0.55 - e.age * 0.18})`;
+        fillPixelCircle(ctx, e.x, e.y, e.radius * 1.2);
+      }
     }
 
     for (const w of fx.waves) {
@@ -283,7 +323,28 @@ export class BattleRenderer {
   }
 
   /** Advances presentation-only animations; call once per sim tick. */
-  tick(): void {
+  tick(round: Round): void {
+    this.particles.tick();
+    this.shake.tick();
+    for (const t of round.tanks) {
+      const shown = this.turret.get(t.id);
+      const d = shown === undefined ? 0 : t.angle - shown;
+      this.turret.set(t.id, Math.abs(d) <= TURRET_SNAP ? t.angle : shown! + d * TURRET_EASE);
+
+      const prev = this.lastY.get(t.id);
+      this.lastY.set(t.id, t.y);
+      if (prev === undefined || !t.alive) continue;
+      if (t.y > prev) {
+        if (!this.fallFrom.has(t.id)) this.fallFrom.set(t.id, prev);
+      } else if (this.fallFrom.has(t.id)) {
+        const drop = t.y - this.fallFrom.get(t.id)!;
+        this.fallFrom.delete(t.id);
+        if (drop >= DUST_MIN_DROP) {
+          this.particles.dust(t.x, t.y, drop);
+          this.kick(Math.min(3, drop / 25));
+        }
+      }
+    }
     for (const [id, n] of this.flashes) {
       if (n <= 1) this.flashes.delete(id);
       else this.flashes.set(id, n - 1);

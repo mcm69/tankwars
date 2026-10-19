@@ -18,9 +18,12 @@ export const BACKGROUND_NAMES: Record<Background, string> = {
   bars: 'Color Bars',
   circles: 'Circles',
   spreading: 'Spreading',
-  blue: 'Blue',
+  blue: 'Blue Sky',
   random: 'Random',
 };
+
+export const MOTION_PREFS = ['auto', 'full', 'reduced'] as const;
+export type MotionPref = (typeof MOTION_PREFS)[number];
 
 /** Everything chosen on the main menu: sim options plus set and presentation settings. */
 export interface Settings extends GameOptions {
@@ -29,8 +32,11 @@ export interface Settings extends GameOptions {
   /** Master volume, 0–10. */
   volume: number;
   background: Background;
-  /** Background animation speed, 0 = still, 10 = fastest (applies in Stage 12). */
+  /** Background animation speed, 0 = still, 10 = fastest. */
   backgroundSpeed: number;
+  /** Reduced motion: follow the system setting, or force full/reduced. */
+  motion: MotionPref;
+  screenShake: boolean;
   gamesPerSet: number;
   players: number;
   computersBuy: boolean;
@@ -44,6 +50,8 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   volume: 7,
   background: 'random',
   backgroundSpeed: 8,
+  motion: 'auto',
+  screenShake: true,
   gamesPerSet: 10,
   players: 2,
   computersBuy: true,

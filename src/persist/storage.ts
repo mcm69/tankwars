@@ -1,6 +1,7 @@
 import { AI_IDS, type AiId, type ConcreteAi } from '../ai/registry';
 import {
   BACKGROUNDS,
+  MOTION_PREFS,
   DEFAULT_SETTINGS,
   defaultSlots,
   MAX_NAME_LENGTH,
@@ -149,6 +150,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     'tanksFall',
     'explosionsKill',
     'computersBuy',
+    'screenShake',
   ] as const) {
     if (isBool(raw[key])) s[key] = raw[key];
   }
@@ -160,6 +162,7 @@ export function sanitizeSettings(raw: unknown): Settings {
   if (oneOf(raw.wind, [...WIND_LEVELS, 'random'] as const)) s.wind = raw.wind;
   if (oneOf(raw.walls, ['off', 'on', 'random'] as const)) s.walls = raw.walls;
   if (oneOf(raw.background, BACKGROUNDS)) s.background = raw.background;
+  if (oneOf(raw.motion, MOTION_PREFS)) s.motion = raw.motion;
   return s;
 }
 

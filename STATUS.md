@@ -1,8 +1,8 @@
 # Status
 
-**Current stage:** Stage 11 — Persistence (complete, awaiting review)
-**Next:** Stage 12 — Visual polish & backgrounds
-**Last updated:** 2026-10-18
+**Current stage:** Stage 12 — Visual polish & backgrounds (complete, awaiting review)
+**Next:** Stage 13 — Balance, QA & release prep
+**Last updated:** 2026-10-19
 
 See [PLAN.md](PLAN.md) for the full stage list. Update this file at the end of every work session
 and at every stage boundary.
@@ -20,20 +20,23 @@ and at every stage boundary.
 - [x] 8 — Computer opponents
 - [x] 9 — Audio
 - [x] 10 — Touch & responsive layout
-- [x] 11 — Persistence (awaiting review)
-- [ ] 12 — Visual polish & backgrounds
+- [x] 11 — Persistence
+- [x] 12 — Visual polish & backgrounds (awaiting review)
 - [ ] 13 — Balance, QA & release prep
 
 ## Current stage progress
 
-Stage 11 is done: nothing is lost on reload.
+Stage 12 is done: the skies move and explosions have more punch.
 
-- **Storage** (`src/persist/storage.ts`): versioned localStorage values (`tankwars:settings`, `tankwars:slots`, `tankwars:set`), each stored as `{ v, data }` with a migration table (empty at v1). Loading never throws. Missing, corrupt or newer-version data falls back to defaults, and every field is validated on its own (types, ranges, enums, name length), so an old or damaged save keeps whatever is still valid. Writes swallow quota and disabled-storage errors, and an in-memory store stands in when localStorage is unusable (private modes).
-- **What's remembered**: every settings change (the `App.settings` setter); the player roster when leaving setup; and the **unfinished set** at round boundaries. That's saved as `round` just before each game starts (after shopping, so a reload replays that game from its start, which is deterministic from the set seed), and as `between` right after a game ends (resuming shows the status screen, then shopping). It's cleared when the set finishes or is quit.
-- **Set snapshots** (`GameSet.snapshot` / `GameSet.restore`): settings, seed, games played, players (name, kind, resolved AI, inventory, score, money, wins, kills) and the last game's results.
-- **Menu**: a "Resume game N of M" row appears at the top when a set is saved (selected by default), and **Restore defaults** resets every option and player. Rows shrink a little to fit.
-- `?play` dev sets never read or write saved games, or your settings.
-- Tests: 184 unit tests (new: settings and roster round-trip; defaults for missing, corrupt, future-version and throwing stores; field-by-field sanitizing; a restored set replays the next game identically; inconsistent snapshots rejected) + 22 e2e tests (new: settings survive a reload; reloading mid-set offers Resume and restores the same game, standings and wind; quitting clears the save).
+- **Backgrounds** (`src/render/backgrounds.ts`): None (black), Starry Sky (twinkling stars and the odd shooting star), Color Bars (rising bands in eight hues), Circles (rainbow rings spreading from the center), Spreading (a turning three-armed spiral), Blue Sky (the landscape's sky with drifting pixel clouds) and Random (one of the animated five per game, picked from the game's seed). Bars, Circles and Spreading emulate VGA palette cycling: a half-resolution index buffer goes through a rotating 64-color lookup table, so a frame costs one pass over 50k bytes, and only when the colors shift. The palettes stay dark so shells and tanks stand out.
+- **Background speed** 0–10 (0 = still) now works.
+- **Reduce motion** (Auto/On/Off; Auto follows `prefers-reduced-motion`): stills the background, turns off screen shake and dims the nuke's full-field flash to 20%.
+- **Screen shake** (On/Off): scales with blast radius (max 6 px), plus kicks for tank deaths and hard landings. Only the field shakes (never upward), and the HUD and sky stay put.
+- **Particles** (`src/render/particles.ts`, presentation only, capped at 700): sparks from every explosion, smoke that rises behind the fireball once it fades (blasts of radius 14+), and dust when a tank lands after a fall. There's also a white flash on each explosion's first frames.
+- **Smoother turret**: the drawn barrel eases toward big angle jumps (mouse aim, computer turns) and snaps for small steps, so keyboard aiming stays exact.
+- Performance: every background holds 60 fps with 10 computer tanks at 3× speed under 4× CPU throttling in phone emulation.
+- Dev params: `?bg=stars&bgspeed=N`. The debug handle has `visuals` (sky, effective speed, motion flags).
+- Tests: 191 unit tests (new: reduced-motion logic, settings sanitizing, Random background resolution, shake decay and direction, particle lifetime and cap) + 24 e2e tests (new: every background renders, and reduced motion stills the sky and disables shake, with a settings override).
 
 ## Implementation notes
 
@@ -45,7 +48,7 @@ Stage 11 is done: nothing is lost on reload.
 - The theme choice uses its own RNG stream (`seed ^ 0x5eed`) so presentation never consumes sim randomness. In Stage 6 the theme becomes part of round setup.
 - `window.__tankwars` is a debug handle (`ticks`, `scene`, `phase`, `round`, `overlay`, `app`, `touchLayout`) used by e2e tests and the console. `/` opens the title; `?play` jumps into a set (see above); `?lab` opens the terrain lab.
 - **Menus are canvas-rendered** (PLAN §2.1 item 6 revised): the widget kit is in `src/ui/widgets.ts`, and `TextEntry` (an off-screen input) handles names. Keys typed before the field takes focus (same tick) are fed in by the scene.
-- Settings (`src/game/settings.ts`) = sim `GameOptions` + sound, volume, fly sound, background, background speed, games per set, players, computers buy. They're saved to localStorage (Stage 11). Background and background speed are stored but take effect in Stage 12.
+- Settings (`src/game/settings.ts`) = sim `GameOptions` + sound, volume, fly sound, background, background speed, reduce motion, screen shake, games per set, players, computers buy. They're saved to localStorage (Stage 11). Presentation settings (sound, background, motion) are read live from `app.settings`; sim options are copied into the set.
 - Commands are queued by input and applied at the start of the next sim tick, so e2e tests must poll after key presses.
 - Physics constants (in `src/sim/constants.ts`): gravity 0.05 px/tick², speed = power × 0.008, wind accel = wind × 0.00012, max speed 40 px/tick per axis. Stage 13 tunes everything.
 - All weapon numbers live in `items.ts` (behaviors) and `weapons.ts`/`effects.ts` (laser, dud, death and CRI constants). They're first-pass values for Stage 13 to tune against the original.
@@ -66,23 +69,24 @@ Stage 11 is done: nothing is lost on reload.
 
 ## Playtest script for current stage
 
-1. Change a few options (volume, wind, players), set up named players and personalities, then reload: everything is as you left it.
-2. Start a set of 3+ games, finish a game, and reload on the status screen, in the shop, or mid-game. The menu now offers "Resume game N of M". Resume: between games you get the status screen and shop; mid-game, that game restarts from its beginning with the same terrain and standings.
-3. Quit a set (Q, Y): no Resume row afterwards. Finish a set: same.
-4. "Restore defaults" in the menu puts all options and players back.
-5. Optional robustness check: in DevTools set `localStorage['tankwars:settings'] = 'oops'` and reload. You get defaults, with no errors.
+1. Try each Background in the menu (or `?play&bg=circles`). Color Bars rise, Circles spread outward, Spreading turns, Starry Sky twinkles (wait for a shooting star), and Blue Sky has drifting clouds. Random changes from game to game.
+2. Background speed 0 freezes the sky; 10 is fast.
+3. Fire a nuke or a big missile: white flash, sparks, smoke rising after the fireball, and the field shakes. Blow the ground out from under a tank: dust when it lands.
+4. Turn Screen shake off: no shaking. Set Reduce motion to On (or turn on your OS's reduced-motion setting with Auto): the sky stops, there's no shaking, and the nuke flash is dim.
+5. Swing the turret with a mouse click far from the current angle: the barrel sweeps instead of jumping. Arrow-key aiming still moves exactly one degree.
 
 ## Known issues
 
 - The plateaus style can still leave an occasional 3–4 px wide spike (tank pads are flattened, so tanks are unaffected).
 - While the desktop app's browser pane is hidden, rAF stops entirely. That's a pane artifact, not a game bug. Use headless Playwright for visual checks (see WORKING_NOTES).
 - Column collapse can leave sheer vertical walls at the edges of a collapsed area. That's inherent to the column model and fits the original's look.
+- With 19 menu rows (20 with Resume), the menu's rows are 17 px tall; Restore defaults and Start sit close together.
+- Screen shake can show a sliver of sky (up to 3 px) at the field's left and right edges for a frame or two.
 - The dev FPS overlay covers the top-left of the HUD in dev builds (toggle with F3).
 - On phones the core HUD's small buttons and strip are still tappable but small; the side panels are the intended touch controls. Strip slot taps arm weapons, though the weapon carousel is easier.
 - Resuming mid-game restarts that game from its start (by design: saves happen at round boundaries, and the replay is deterministic).
 - I haven't tried a real iOS/Android device; it's verified with Chromium mobile emulation only (WebKit isn't installed for Playwright).
 - AI quirks are deliberate: Lobber and Lob & Shoot flounder with bouncing walls; Windless Wit repeats wind-blind misses; Rifleman is harmless unless you're above him.
-- The Background and Background speed menu options are stored but not rendered until Stage 12; sound options wait for Stage 9.
 - A CRI 20/D on a full field burns about 30k pixels in roughly 2.3 s. It's fine on desktop; check phones in Stage 10/13.
 - Tanks buried by dirt can still fire, but their shells hit the dirt right away and hurt them, which is deliberate ("death by dirt").
 - A fast drag in the lab carves at sampled pointer positions only (gaps possible). It's a debug tool, so this is fine.

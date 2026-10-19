@@ -9,8 +9,8 @@ test('a two-game set, human vs computer, from title to final results via the UI'
   await page.goto('/');
   await pressUntilScene(page, 'Enter', 'menu');
 
-  // Games per set is the 11th row: move down and lower it from 10 to 2.
-  for (let i = 0; i < 10; i++) await page.keyboard.press('ArrowDown');
+  // Games per set is the 13th row: move down and lower it from 10 to 2.
+  for (let i = 0; i < 12; i++) await page.keyboard.press('ArrowDown');
   for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowLeft');
   await expect
     .poll(() => page.evaluate(() => window.__tankwars!.app!.settings.gamesPerSet))

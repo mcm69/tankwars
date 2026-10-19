@@ -94,6 +94,8 @@ Equipment strip order in game = weapon index 0–17, then H, V (20 boxes).
 - Touch layout (Stage 10): canvas width = clamp(400 × aspect, 800, 960); core 640×400 at `coreOffsetX`. All scenes use core coords via `screen.toLogical`; only the side panels use `toCanvas`. iOS keyboard needs focus inside the gesture (pointerup) and no canvas focus-steal on mousedown.
 - Mobile e2e: `test.use({ ...devices['iPhone 13 landscape'] })` minus `defaultBrowserType`, so it runs in Chromium.
 - Persistence (Stage 11): bump `SAVE_VERSION` and add a `MIGRATIONS[oldVersion]` entry when a saved shape changes. Sanitizers already tolerate added or missing fields, so a migration is only needed for renames or meaning changes. Changing the RNG, terrain generator or round setup changes what a resumed set replays (not a crash, just a different battlefield).
+- Visuals (Stage 12): backgrounds, particles and shake live in `src/render` and use their own RNG streams (`seed ^ 0x5eed` picks the theme and then the Random background; `^0xb6` the sky; `^0xf8` the particles). They must never read or advance the round RNG. Palette-cycled skies are a half-res `Uint8Array` index buffer plus a 64-entry LUT; to add a background, add its id to `BACKGROUNDS` (settings), the sanitizer picks it up, then add its init and draw to `BackgroundLayer` (and to `RANDOM_POOL` if Random should pick it).
+- "Blue Sky" draws the landscape theme's own gradient (so desert games get a sunset), with clouds.
 - Crumble % = per-shot chance that _all_ loose ground collapses (column sand model), not per pixel.
 - Fall damage: (distance − 4 px) × 0.5. Initial drop-in is free.
 - Terrain surface band is 18–90% of field height from the top. Tanks will need headroom above the highest ground.
