@@ -400,6 +400,9 @@ describe('duds', () => {
     const { events, other } = pointBlank(1, 'incinerator');
     expect(events).toContainEqual({ type: 'dud', tankId: other.id });
     expect(events).toContainEqual({ type: 'tankHit', tankId: other.id, damage: 25 });
+    // A dud is spent: it never goes off later (e.g. in the ground right behind the tank).
+    expect(events.some((e) => e.type === 'explode' && !e.harmless)).toBe(false);
+    expect(other.health).toBe(75);
   });
 
   it('no dud means a normal detonation on the tank', () => {

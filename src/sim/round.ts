@@ -346,9 +346,11 @@ export class Round implements World {
     if (!p) return;
     const r = stepProjectile(p, this);
     if (r.kind === 'flying') return;
-    if (r.kind === 'hitTank' && !p.trick && canDud(behaviorOf(p.weapon))) {
-      const chance = this.dudOverride ?? dudChance(Math.hypot(p.vx, p.vy));
-      if (this.rng.chance(chance)) {
+    // A shell that already dudded is spent: it bores through anything else it meets.
+    const spent = p.passed.length > 0;
+    if (r.kind === 'hitTank' && !p.trick && (spent || canDud(behaviorOf(p.weapon)))) {
+      const chance = spent ? 1 : (this.dudOverride ?? dudChance(Math.hypot(p.vx, p.vy)));
+      if (spent || this.rng.chance(chance)) {
         // Fails to detonate: bores through the tank and keeps flying.
         p.passed.push(r.tankId);
         this.damage(r.tankId, DUD_DAMAGE);
@@ -363,7 +365,9 @@ export class Round implements World {
       this.phase = 'settling';
       return;
     }
-    detonate(this, this.effects, p.weapon, r.x, r.y);
+    if (spent)
+      this.effects.puff(this, r.x, r.y); // a dud lands without going off
+    else detonate(this, this.effects, p.weapon, r.x, r.y);
     this.phase = 'effects';
   }
 
