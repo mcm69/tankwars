@@ -1,7 +1,7 @@
 # Status
 
 **Current stage:** Stage 13 — Balance, QA & release prep (complete, awaiting sign-off)
-**Next:** Sign-off, hosting choice, balance tweaks from playtesting
+**Next:** Sign-off, first GitHub Pages deploy, balance tweaks from playtesting
 **Last updated:** 2026-10-19
 
 See [PLAN.md](PLAN.md) for the full stage list. Update this file at the end of every work session
@@ -34,6 +34,7 @@ Stage 13 is done, apart from sign-off and the choices below. Version 1.0.0.
 - **Accessibility:** a **Tank names** option (Options → Display) labels each tank with its player's name, so nobody has to rely on color. Together with Reduce motion this covers the plan. Remappable keys stay a stretch goal.
 - **Balance:** the AI tournament ranking still matches the manual (Birdy Bonker 94% in duels, then Windless Wit, Lob & Shoot and Lobber around 47%, Twanger 40%, Rifleman 22%, Mr. Stupid 10%). I couldn't do the side-by-side DOSBox sessions, so the physics, weapon and economy numbers are the first-pass values listed below, to tune from your playtesting.
 - **Release:** a static build (47.6 kB gzipped JS) with relative paths, checked from a subpath on a plain file server. There's a web manifest and our own pixel-tank icon (SVG plus 180/192/512 PNGs), and a hand-written service worker (`public/sw.js`, production only) that makes it playable offline after the first visit, verified by an offline reload. The version shows on the title screen. A README covers playing, development, bug reports and deploying.
+- **Hosting:** GitHub Pages via `.github/workflows/deploy.yml` (lint, unit tests, build, then deploy `dist/` on each push to `main`). The steps were checked in a clean clone. It hasn't run on GitHub yet: the repository has no remote.
 - Tests: 202 unit tests (new: replay reproduces whole AI rounds exactly, stops at a tick, detects divergence) + 28 e2e tests (new: a real in-browser game replays to the identical state in Node; F9 copies the debug state; a crash stops the game and shows the panel).
 
 ## Implementation notes

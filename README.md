@@ -74,6 +74,11 @@ and [WORKING_NOTES.md](WORKING_NOTES.md) (design decisions and gotchas).
 from any host and any subpath (GitHub Pages, Netlify, an S3 bucket, `python3 -m http.server`).
 Serve it over HTTPS (or localhost) for offline support and "add to home screen".
 
+**GitHub Pages:** `.github/workflows/deploy.yml` lints, tests, builds and publishes `dist/` on
+every push to `main` (or by hand from the Actions tab). One-time setup: in the repository's
+Settings → Pages, set the source to "GitHub Actions". The game then lives at
+`https://<user>.github.io/<repo>/`.
+
 ## Credits
 
 Original Tank Wars © 1990 Kenny Morse. This is an unofficial fan remake for fun and
