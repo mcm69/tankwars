@@ -29,6 +29,8 @@ import {
   DUD_DAMAGE,
   dudChance,
   fireLaser,
+  fireTrickShot,
+  isTrickShot,
   LASER_MIN_ENERGY,
 } from './weapons';
 import type { DamageKind, DeathStyle, RoundEvent, World } from './world';
@@ -288,6 +290,24 @@ export class Round implements World {
 
     t.inventory[weapon] = Math.max(0, t.inventory[weapon]! - 1);
     this.reselectIfEmpty(t);
+
+    if (isTrickShot(t, weapon)) {
+      t.guidance = null;
+      this.events.push({ type: 'fire', tankId: t.id, weapon });
+      const { points } = fireTrickShot(this, t);
+      this.shotLog.push({
+        tankId: t.id,
+        angle: t.angle,
+        power: t.power,
+        weapon,
+        impact: points[points.length - 1] ?? null,
+      });
+      this.effects.beam(points, t.color);
+      this.events.push({ type: 'laser', tankId: t.id });
+      this.phase = 'effects';
+      return true;
+    }
+
     this.projectile = launch(t, weapon);
     this.shotLog.push({ tankId: t.id, angle: t.angle, power: t.power, weapon, impact: null });
     const g = t.guidance;

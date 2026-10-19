@@ -7,7 +7,7 @@ import { drawText, drawTextShadow } from './font';
 import { Shake, shakeForRadius } from './motion';
 import { Particles } from './particles';
 import { drawPixelLine, fillPixelCircle, strokePixelCircle } from './pixels';
-import { lighten, PLAYER_COLORS, SPRITE_HEIGHT, tankSprite } from './tank-sprite';
+import { healthColor, lighten, PLAYER_COLORS, SPRITE_HEIGHT, tankSprite } from './tank-sprite';
 
 const FIRE_COLORS = ['#ffffff', '#fff27a', '#ffc23a', '#ff7a1a', '#e0321e', '#9a1a14'];
 const SHIELD_ENERGY = itemIndex('shieldEnergy');
@@ -201,7 +201,7 @@ export class BattleRenderer {
   ): void {
     const x = Math.round(t.x);
     const y = Math.round(t.y);
-    const color = override ?? PLAYER_COLORS[t.color]!;
+    const color = override ?? healthColor(PLAYER_COLORS[t.color]!, t.health);
     const a = ((this.turret.get(t.id) ?? t.angle) * Math.PI) / 180;
     ctx.fillStyle = lighten(color, 0.2);
     drawPixelLine(

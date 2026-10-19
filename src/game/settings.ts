@@ -49,7 +49,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   flySound: false,
   volume: 7,
   background: 'random',
-  backgroundSpeed: 8,
+  backgroundSpeed: 3,
   motion: 'auto',
   screenShake: true,
   gamesPerSet: 10,

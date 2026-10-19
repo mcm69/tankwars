@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { MenuList, type MenuItem } from '../src/ui/widgets';
 
-const key = (code: string) => ({ type: 'key', code, repeat: false }) as const;
+const key = (code: string) =>
+  ({ type: 'key', code, key: '', shift: false, repeat: false }) as const;
 
 describe('MenuList', () => {
   const items: MenuItem[] = [

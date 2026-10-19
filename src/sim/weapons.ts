@@ -1,3 +1,4 @@
+import { MAX_HEALTH } from './constants';
 import type { Effects } from './effects';
 import { ITEMS, type Behavior } from './items';
 import { barrelTip, hitsTank, type Tank } from './tank';
@@ -5,6 +6,15 @@ import type { World } from './world';
 
 /** Laser energy needed to fire at all. */
 export const LASER_MIN_ENERGY = 100;
+/**
+ * The original's easter egg: at full health (Men = 100) and power exactly 800, any shot flies
+ * as a beam that passes through the ground and, with walls on, bounces off every side until it
+ * finds a tank (possibly the shooter).
+ */
+export const TRICK_SHOT_POWER = 800;
+export const TRICK_SHOT_DAMAGE = 100;
+/** Beam length cap, so a beam that never finds a tank still ends. */
+const TRICK_SHOT_MAX_LENGTH = 40_000;
 /** Beam length budget per unit of energy spent. */
 const LASER_RANGE_PER_ENERGY = 1.2;
 /** Boring through ground costs this much more range than open air. */
@@ -124,4 +134,59 @@ export function fireLaser(world: World, shooter: Tank, energy: number): LaserRes
   points.push({ x, y });
   for (const [id, dmg] of hits) world.damage(id, dmg);
   return { points, hits };
+}
+
+export function isTrickShot(shooter: Tank, weapon: number): boolean {
+  return (
+    shooter.health === MAX_HEALTH &&
+    shooter.power === TRICK_SHOT_POWER &&
+    behaviorOf(weapon).kind !== 'laser'
+  );
+}
+
+export interface TrickShotResult {
+  points: { x: number; y: number }[];
+  /** The tank it found, or null if it left the field or ran out. */
+  hitId: number | null;
+}
+
+/** Fires the easter-egg beam (see `TRICK_SHOT_POWER`). Ground is untouched. */
+export function fireTrickShot(world: World, shooter: Tank): TrickShotResult {
+  const { terrain, tanks, walls } = world;
+  const a = (shooter.angle * Math.PI) / 180;
+  let dx = Math.cos(a);
+  let dy = -Math.sin(a);
+  const start = barrelTip(shooter);
+  let x = start.x;
+  let y = start.y;
+  const points = [{ x, y }];
+  let hitId: number | null = null;
+  for (let travelled = 1; travelled <= TRICK_SHOT_MAX_LENGTH; travelled++) {
+    x += dx;
+    y += dy;
+    const outX = x < 0 || x >= terrain.width;
+    const outY = y < 0 || y >= terrain.height;
+    if (outX || outY) {
+      if (!walls) break;
+      if (outX) {
+        dx = -dx;
+        x = Math.min(terrain.width - 1, Math.max(0, x));
+      }
+      if (outY) {
+        dy = -dy;
+        y = Math.min(terrain.height - 1, Math.max(0, y));
+      }
+      points.push({ x, y });
+    }
+    const hit = tanks.find(
+      (t) => t.alive && hitsTank(t, x, y) && (t.id !== shooter.id || travelled >= 20),
+    );
+    if (hit) {
+      hitId = hit.id;
+      break;
+    }
+  }
+  points.push({ x, y });
+  if (hitId !== null) world.damage(hitId, TRICK_SHOT_DAMAGE);
+  return { points, hitId };
 }

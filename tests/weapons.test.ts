@@ -7,7 +7,15 @@ import { DEFAULT_OPTIONS, type GameOptions } from '../src/sim/options';
 import { Round, type RoundEvent } from '../src/sim/round';
 import { createTank, type Tank } from '../src/sim/tank';
 import { Material, Terrain } from '../src/sim/terrain';
-import { detonate, dudChance, fireLaser, LASER_MIN_ENERGY } from '../src/sim/weapons';
+import {
+  detonate,
+  dudChance,
+  fireLaser,
+  fireTrickShot,
+  isTrickShot,
+  LASER_MIN_ENERGY,
+  TRICK_SHOT_POWER,
+} from '../src/sim/weapons';
 import type { World } from '../src/sim/world';
 
 const W = 624;
@@ -264,6 +272,68 @@ describe('laser', () => {
     expect(round.phase).toBe('effects');
     expect(round.effects.beams).toHaveLength(1);
     expect(LASER_MIN_ENERGY).toBe(100);
+  });
+});
+
+describe('trick shot (Men = 100, power 800)', () => {
+  it('only triggers at full health and exactly 800 power, for non-laser weapons', () => {
+    const t = createTank(0, 'a', 0, 100, 200);
+    t.power = TRICK_SHOT_POWER;
+    expect(isTrickShot(t, 0)).toBe(true);
+    expect(isTrickShot(t, itemIndex('laser'))).toBe(false);
+    t.power = 799;
+    expect(isTrickShot(t, 0)).toBe(false);
+    t.power = TRICK_SHOT_POWER;
+    t.health = 99;
+    expect(isTrickShot(t, 0)).toBe(false);
+  });
+
+  it('passes through the ground untouched and bounces until it finds a tank', () => {
+    const terrain = flat(200);
+    const shooter = createTank(0, 'a', 0, 100, 200);
+    const target = createTank(1, 'b', 1, 450, 200);
+    shooter.angle = 63;
+    const w = { ...world(terrain, [shooter, target]), walls: true };
+    const before = solidCount(terrain);
+    const { points, hitId } = fireTrickShot(w, shooter);
+    expect(hitId).not.toBeNull();
+    expect(points.length).toBeGreaterThan(3); // bounced at least twice
+    expect(solidCount(terrain)).toBe(before);
+    expect(w.events).toContainEqual(expect.objectContaining({ type: 'tankHit', damage: 100 }));
+  });
+
+  it('can find the shooter itself', () => {
+    const shooter = createTank(0, 'a', 0, 312, 200);
+    shooter.angle = 90; // straight up, off the ceiling, straight back down
+    const w = { ...world(flat(200), [shooter]), walls: true };
+    expect(fireTrickShot(w, shooter).hitId).toBe(0);
+    expect(shooter.health).toBe(0);
+  });
+
+  it('leaves the field without walls', () => {
+    const shooter = createTank(0, 'a', 0, 100, 200);
+    const target = createTank(1, 'b', 1, 450, 200);
+    shooter.angle = 60;
+    const { hitId } = fireTrickShot(world(flat(200), [shooter, target]), shooter);
+    expect(hitId).toBeNull();
+    expect(target.health).toBe(100);
+  });
+
+  it('replaces the normal shot in a round and uses up the weapon', () => {
+    const round = new Round({
+      seed: 2,
+      players: [
+        { name: 'a', color: 0 },
+        { name: 'b', color: 1 },
+      ],
+      wind: 0,
+    });
+    while (round.phase !== 'aiming') round.tick();
+    round.command({ type: 'setPower', power: TRICK_SHOT_POWER });
+    expect(round.command({ type: 'fire' })).toBe(true);
+    expect(round.projectile).toBeNull();
+    expect(round.phase).toBe('effects');
+    expect(round.effects.beams).toHaveLength(1);
   });
 });
 

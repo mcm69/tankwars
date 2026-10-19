@@ -65,3 +65,14 @@ export function darken(hex: string, t: number): string {
   const ch = (s: number) => Math.round(((v >> s) & 0xff) * (1 - t));
   return `rgb(${ch(16)} ${ch(8)} ${ch(0)})`;
 }
+
+/**
+ * A tank's body color for its health: the player color darkening toward black as it's hurt,
+ * as in the original. Quantized to 5% steps so the sprite cache stays small.
+ */
+export function healthColor(hex: string, health: number): string {
+  const k = Math.max(0, Math.min(100, Math.round(health / 5) * 5)) / 100;
+  const v = parseInt(hex.slice(1), 16);
+  const ch = (s: number) => Math.round(((v >> s) & 0xff) * k);
+  return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')}`;
+}

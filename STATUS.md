@@ -36,8 +36,9 @@ Stage 12 is done: the skies move and explosions have more punch.
 - **Smoother turret**: the drawn barrel eases toward big angle jumps (mouse aim, computer turns) and snaps for small steps, so keyboard aiming stays exact.
 - Performance: every background holds 60 fps with 10 computer tanks at 3× speed under 4× CPU throttling in phone emulation.
 - **Menu split** (after review): the main menu now has only Start, Number of players, Games per set, Wind and Options (plus Resume when a set is saved). Everything else is on a new **Options** screen (`src/scenes/options.ts`, O from the menu), in Game rules, Sound and Display sections, with Restore defaults and Back (Esc). Row definitions are shared in `src/scenes/menu-items.ts`, and `MenuList` supports section headings the cursor skips.
+- **QA fixes** (after review): background speed defaults to 3 (8 was too fast). Tanks darken toward black as they lose health, as in the original (`healthColor`, 5% steps). And the original's **easter egg**: at Men = 100 and power exactly 800, any non-laser shot becomes a beam (`fireTrickShot`) that passes through the ground without carving and, with walls on, bounces off the sides, ceiling and floor until it finds a tank (the shooter included) for 100 damage. Without walls it ends when it leaves the field. Computers nudge 800 to 799 so they never stumble into it.
 - Dev params: `?bg=stars&bgspeed=N`. The debug handle has `visuals` (sky, effective speed, motion flags).
-- Tests: 193 unit tests (new: MenuList headings, reduced-motion logic, settings sanitizing, Random background resolution, shake decay and direction, particle lifetime and cap) + 25 e2e tests (new: Options screen navigation, every background renders, and reduced motion stills the sky and disables shake, with a settings override).
+- Tests: 199 unit tests (new: trick shot, health color, MenuList headings, reduced-motion logic, settings sanitizing, Random background resolution, shake decay and direction, particle lifetime and cap) + 25 e2e tests (new: Options screen navigation, every background renders, and reduced motion stills the sky and disables shake, with a settings override).
 
 ## Implementation notes
 
@@ -76,6 +77,9 @@ Stage 12 is done: the skies move and explosions have more punch.
 4. Fire a nuke or a big missile: white flash, sparks, smoke rising after the fireball, and the field shakes. Blow the ground out from under a tank: dust when it lands.
 5. Turn Screen shake off: no shaking. Set Reduce motion to On (or turn on your OS's reduced-motion setting with Auto): the sky stops, there's no shaking, and the nuke flash is dim.
 6. Swing the turret with a mouse click far from the current angle: the barrel sweeps instead of jumping. Arrow-key aiming still moves exactly one degree.
+
+7. Shoot a tank a few times: it gets darker with each hit, nearly black near death.
+8. Easter egg: at full health set power to exactly 800 and fire with walls on. A beam zigzags through everything until it hits someone, maybe you.
 
 ## Known issues
 

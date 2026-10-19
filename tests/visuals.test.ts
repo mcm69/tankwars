@@ -10,6 +10,7 @@ import {
   shakeForRadius,
 } from '../src/render/motion';
 import { Particles } from '../src/render/particles';
+import { healthColor } from '../src/render/tank-sprite';
 
 describe('reduced motion', () => {
   it('follows the system on auto, and can be forced either way', () => {
@@ -84,5 +85,14 @@ describe('particles', () => {
     const p = new Particles(new Rng(5));
     for (let i = 0; i < 100; i++) p.explosion(100, 100, 300);
     expect(p.count).toBeLessThanOrEqual(700);
+  });
+});
+
+describe('tank health color', () => {
+  it('darkens the player color toward black as health drops', () => {
+    expect(healthColor('#ff4848', 100)).toBe('#ff4848');
+    expect(healthColor('#ff4848', 50)).toBe('#802424');
+    expect(healthColor('#ff4848', 0)).toBe('#000000');
+    expect(healthColor('#ff4848', 52)).toBe(healthColor('#ff4848', 50));
   });
 });

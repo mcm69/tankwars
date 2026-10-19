@@ -1,5 +1,7 @@
 import type { Rng } from '../core/rng';
 import type { Command, Round } from '../sim/round';
+import { MAX_HEALTH } from '../sim/constants';
+import { TRICK_SHOT_POWER } from '../sim/weapons';
 import {
   birdyBonker,
   lobAndShoot,
@@ -81,7 +83,10 @@ export function resolveAi(id: AiId, rng: Rng): ConcreteAi {
 export function planTurn(ai: ConcreteAi, round: Round, rng: Rng, memory: AiMemory): AiPlan | null {
   const me = round.current;
   if (!me?.alive || round.phase !== 'aiming') return null;
-  return STRATEGIES[ai]({ round, me, rng, memory });
+  const plan = STRATEGIES[ai]({ round, me, rng, memory });
+  // Computers don't know the 800-power trick shot; keep them from stumbling into it.
+  if (plan && me.health === MAX_HEALTH && plan.power === TRICK_SHOT_POWER) plan.power -= 1;
+  return plan;
 }
 
 /** The commands that carry out a plan immediately (headless play and tests). */
