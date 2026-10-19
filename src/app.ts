@@ -8,6 +8,7 @@ import type { DebugOverlay } from './render/debug-overlay';
 import type { Screen } from './render/screen';
 import { BattleScene } from './scenes/battle';
 import { MenuScene } from './scenes/menu';
+import { OptionsScene } from './scenes/options';
 import { ResultsScene } from './scenes/results';
 import type { Scene } from './scenes/scene';
 import { SetupScene } from './scenes/setup';
@@ -102,9 +103,13 @@ export class App {
     this.goto(new TitleScene(this));
   }
 
-  showMenu(message: string | null = null): void {
+  showMenu(message: string | null = null, focus?: string): void {
     this.set = null;
-    this.goto(new MenuScene(this, message));
+    this.goto(new MenuScene(this, message, focus));
+  }
+
+  showOptions(): void {
+    this.goto(new OptionsScene(this));
   }
 
   showSetup(): void {

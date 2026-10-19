@@ -98,6 +98,8 @@ export interface MenuItem {
   activate?: () => void;
   /** Extra line shown at the bottom of the menu while this row is selected. */
   help?: string;
+  /** A section heading: drawn as a title and skipped by the cursor. */
+  header?: boolean;
 }
 
 /**
@@ -115,7 +117,25 @@ export class MenuList {
     readonly y: number,
     readonly w: number,
     readonly rowH = 18,
-  ) {}
+  ) {
+    this.selected = this.step(-1, 1);
+  }
+
+  /** Next selectable row from `from` in direction `dir`, wrapping around. */
+  private step(from: number, dir: 1 | -1): number {
+    const n = this.items.length;
+    for (let k = 1; k <= n; k++) {
+      const i = (((from + dir * k) % n) + n) % n;
+      if (!this.items[i]!.header) return i;
+    }
+    return from;
+  }
+
+  /** Moves the cursor to the row with this id (if it exists and is selectable). */
+  select(id: string): void {
+    const i = this.items.findIndex((it) => it.id === id && !it.header);
+    if (i >= 0) this.selected = i;
+  }
 
   rowRect(i: number): Rect {
     return { x: this.x, y: this.y + i * this.rowH, w: this.w, h: this.rowH - 2 };
@@ -130,7 +150,9 @@ export class MenuList {
   }
 
   private rowAt(x: number, y: number): number {
-    for (let i = 0; i < this.items.length; i++) if (inside(this.rowRect(i), x, y)) return i;
+    for (let i = 0; i < this.items.length; i++) {
+      if (!this.items[i]!.header && inside(this.rowRect(i), x, y)) return i;
+    }
     return -1;
   }
 
@@ -139,9 +161,8 @@ export class MenuList {
     const item = this.items[this.selected];
     switch (e.type) {
       case 'key':
-        if (e.code === 'ArrowUp')
-          this.selected = (this.selected + this.items.length - 1) % this.items.length;
-        else if (e.code === 'ArrowDown') this.selected = (this.selected + 1) % this.items.length;
+        if (e.code === 'ArrowUp') this.selected = this.step(this.selected, -1);
+        else if (e.code === 'ArrowDown') this.selected = this.step(this.selected, 1);
         else if (e.code === 'ArrowLeft') item?.change?.(-1);
         else if (e.code === 'ArrowRight') item?.change?.(1);
         else if (e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter') {
@@ -179,6 +200,15 @@ export class MenuList {
   draw(ctx: CanvasRenderingContext2D): void {
     this.items.forEach((it, i) => {
       const r = this.rowRect(i);
+      if (it.header) {
+        const ty = r.y + r.h - 8;
+        drawText(ctx, it.label, r.x + 4, ty, UI.border);
+        ctx.fillStyle = UI.border;
+        ctx.globalAlpha = 0.4;
+        ctx.fillRect(r.x + 8 + textWidth(it.label), ty + 3, r.w - 12 - textWidth(it.label), 1);
+        ctx.globalAlpha = 1;
+        return;
+      }
       const sel = i === this.selected;
       if (sel || i === this.hover) {
         ctx.fillStyle = sel ? '#2a1840' : '#1c1430';
@@ -188,13 +218,15 @@ export class MenuList {
       // The original marked the current option with an asterisk.
       if (sel) drawText(ctx, '*', r.x + 4, ty, UI.accent);
       if (it.activate) {
+        // Big labels need room; in tight lists actions are centered at normal size.
+        const scale = this.rowH >= 20 ? 2 : 1;
         drawText(
           ctx,
           it.label,
           r.x + r.w / 2,
-          r.y + (r.h - 14) / 2,
+          r.y + (r.h - 7 * scale) / 2,
           sel ? '#ffffff' : UI.value,
-          2,
+          scale,
           'center',
         );
         return;

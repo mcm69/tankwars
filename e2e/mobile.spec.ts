@@ -112,8 +112,8 @@ test('setup: tapping a name opens the keyboard field', async ({ page }) => {
   await tapCanvas(page, 400, 200);
   await expect.poll(() => scene(page)).toBe('menu');
   await page.waitForTimeout(300);
-  // Start is the last menu row (19 rows of 17 px from y = 44).
-  await tapCore(page, 320, 44 + 18 * 17 + 8);
+  // Start is the first menu row (26 px rows from y = 150).
+  await tapCore(page, 320, 150 + 12);
   await expect.poll(() => scene(page)).toBe('setup');
   await tapCore(page, 120, 52 + 10);
   await expect

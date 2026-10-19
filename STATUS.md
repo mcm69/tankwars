@@ -35,8 +35,9 @@ Stage 12 is done: the skies move and explosions have more punch.
 - **Particles** (`src/render/particles.ts`, presentation only, capped at 700): sparks from every explosion, smoke that rises behind the fireball once it fades (blasts of radius 14+), and dust when a tank lands after a fall. There's also a white flash on each explosion's first frames.
 - **Smoother turret**: the drawn barrel eases toward big angle jumps (mouse aim, computer turns) and snaps for small steps, so keyboard aiming stays exact.
 - Performance: every background holds 60 fps with 10 computer tanks at 3× speed under 4× CPU throttling in phone emulation.
+- **Menu split** (after review): the main menu now has only Start, Number of players, Games per set, Wind and Options (plus Resume when a set is saved). Everything else is on a new **Options** screen (`src/scenes/options.ts`, O from the menu), in Game rules, Sound and Display sections, with Restore defaults and Back (Esc). Row definitions are shared in `src/scenes/menu-items.ts`, and `MenuList` supports section headings the cursor skips.
 - Dev params: `?bg=stars&bgspeed=N`. The debug handle has `visuals` (sky, effective speed, motion flags).
-- Tests: 191 unit tests (new: reduced-motion logic, settings sanitizing, Random background resolution, shake decay and direction, particle lifetime and cap) + 24 e2e tests (new: every background renders, and reduced motion stills the sky and disables shake, with a settings override).
+- Tests: 193 unit tests (new: MenuList headings, reduced-motion logic, settings sanitizing, Random background resolution, shake decay and direction, particle lifetime and cap) + 25 e2e tests (new: Options screen navigation, every background renders, and reduced motion stills the sky and disables shake, with a settings override).
 
 ## Implementation notes
 
@@ -69,18 +70,18 @@ Stage 12 is done: the skies move and explosions have more punch.
 
 ## Playtest script for current stage
 
-1. Try each Background in the menu (or `?play&bg=circles`). Color Bars rise, Circles spread outward, Spreading turns, Starry Sky twinkles (wait for a shooting star), and Blue Sky has drifting clouds. Random changes from game to game.
-2. Background speed 0 freezes the sky; 10 is fast.
-3. Fire a nuke or a big missile: white flash, sparks, smoke rising after the fireball, and the field shakes. Blow the ground out from under a tank: dust when it lands.
-4. Turn Screen shake off: no shaking. Set Reduce motion to On (or turn on your OS's reduced-motion setting with Auto): the sky stops, there's no shaking, and the nuke flash is dim.
-5. Swing the turret with a mouse click far from the current angle: the barrel sweeps instead of jumping. Arrow-key aiming still moves exactly one degree.
+1. The main menu is short now: Start, players, games per set, wind, Options. Open Options (Enter on it, or O): rules, sound and display options in sections; Esc goes back with the cursor on Options.
+2. Try each Background in Options (or `?play&bg=circles`). Color Bars rise, Circles spread outward, Spreading turns, Starry Sky twinkles (wait for a shooting star), and Blue Sky has drifting clouds. Random changes from game to game.
+3. Background speed 0 freezes the sky; 10 is fast.
+4. Fire a nuke or a big missile: white flash, sparks, smoke rising after the fireball, and the field shakes. Blow the ground out from under a tank: dust when it lands.
+5. Turn Screen shake off: no shaking. Set Reduce motion to On (or turn on your OS's reduced-motion setting with Auto): the sky stops, there's no shaking, and the nuke flash is dim.
+6. Swing the turret with a mouse click far from the current angle: the barrel sweeps instead of jumping. Arrow-key aiming still moves exactly one degree.
 
 ## Known issues
 
 - The plateaus style can still leave an occasional 3–4 px wide spike (tank pads are flattened, so tanks are unaffected).
 - While the desktop app's browser pane is hidden, rAF stops entirely. That's a pane artifact, not a game bug. Use headless Playwright for visual checks (see WORKING_NOTES).
 - Column collapse can leave sheer vertical walls at the edges of a collapsed area. That's inherent to the column model and fits the original's look.
-- With 19 menu rows (20 with Resume), the menu's rows are 17 px tall; Restore defaults and Start sit close together.
 - Screen shake can show a sliver of sky (up to 3 px) at the field's left and right edges for a frame or two.
 - The dev FPS overlay covers the top-left of the HUD in dev builds (toggle with F3).
 - On phones the core HUD's small buttons and strip are still tappable but small; the side panels are the intended touch controls. Strip slot taps arm weapons, though the weapon carousel is easier.

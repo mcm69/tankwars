@@ -9,8 +9,8 @@ test('a two-game set, human vs computer, from title to final results via the UI'
   await page.goto('/');
   await pressUntilScene(page, 'Enter', 'menu');
 
-  // Games per set is the 13th row: move down and lower it from 10 to 2.
-  for (let i = 0; i < 12; i++) await page.keyboard.press('ArrowDown');
+  // Games per set is the 3rd row: move down and lower it from 10 to 2.
+  for (let i = 0; i < 2; i++) await page.keyboard.press('ArrowDown');
   for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowLeft');
   await expect
     .poll(() => page.evaluate(() => window.__tankwars!.app!.settings.gamesPerSet))
@@ -65,4 +65,19 @@ test('setup screen: mouse toggles type and personality', async ({ page }) => {
     .poll(() => page.evaluate(() => window.__tankwars!.app!.slots[1]!.kind))
     .toBe('computer');
   expect(await page.evaluate(() => window.__tankwars!.app!.slots[1]!.ai)).not.toBe('stupid');
+});
+
+test('options live on their own screen and Esc returns to the menu', async ({ page }) => {
+  await page.goto('/');
+  await pressUntilScene(page, 'Enter', 'menu');
+  for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowDown'); // Options
+  await page.keyboard.press('Enter');
+  await expect.poll(() => scene(page)).toBe('options');
+  // The cursor starts on the first option (Crumbling hills), skipping the section heading.
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => page.evaluate(() => window.__tankwars!.app!.settings.crumble)).toBe(40);
+  await page.keyboard.press('Escape');
+  await expect.poll(() => scene(page)).toBe('menu');
+  await page.keyboard.press('Enter'); // back on Options
+  await expect.poll(() => scene(page)).toBe('options');
 });

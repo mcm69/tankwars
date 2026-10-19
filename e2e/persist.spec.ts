@@ -4,7 +4,9 @@ import { continueToNext, finishGame, phase, pressUntilScene, scene } from './hel
 test('settings survive a reload', async ({ page }) => {
   await page.goto('/');
   await pressUntilScene(page, 'Enter', 'menu');
-  await page.keyboard.press('ArrowDown'); // Volume
+  await page.keyboard.press('KeyO');
+  await expect.poll(() => scene(page)).toBe('options');
+  for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowDown'); // Volume
   await page.keyboard.press('ArrowLeft');
   await page.keyboard.press('ArrowLeft');
   await expect.poll(() => page.evaluate(() => window.__tankwars!.app!.settings.volume)).toBe(5);
@@ -15,8 +17,8 @@ test('settings survive a reload', async ({ page }) => {
 test('reloading mid-set resumes at the same game with the same standings', async ({ page }) => {
   await page.goto('/');
   await pressUntilScene(page, 'Enter', 'menu');
-  // Games per set (13th row) down to 3, then start with the default human vs computer.
-  for (let i = 0; i < 12; i++) await page.keyboard.press('ArrowDown');
+  // Games per set (3rd row) down to 3, then start with the default human vs computer.
+  for (let i = 0; i < 2; i++) await page.keyboard.press('ArrowDown');
   for (let i = 0; i < 7; i++) await page.keyboard.press('ArrowLeft');
   await page.keyboard.press('KeyS');
   await expect.poll(() => scene(page)).toBe('setup');
