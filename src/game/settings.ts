@@ -37,6 +37,8 @@ export interface Settings extends GameOptions {
   /** Reduced motion: follow the system setting, or force full/reduced. */
   motion: MotionPref;
   screenShake: boolean;
+  /** Names over the tanks, so players can be told apart without relying on color. */
+  tankLabels: boolean;
   gamesPerSet: number;
   players: number;
   computersBuy: boolean;
@@ -52,6 +54,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   backgroundSpeed: 3,
   motion: 'auto',
   screenShake: true,
+  tankLabels: false,
   gamesPerSet: 10,
   players: 2,
   computersBuy: true,

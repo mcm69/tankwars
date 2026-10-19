@@ -1,7 +1,7 @@
 {
   "name": "tankwars",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,8 @@
     "e2e": "playwright test",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "sim": "tsx scripts/tournament.ts"
+    "sim": "tsx scripts/tournament.ts",
+    "replay": "tsx scripts/replay.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

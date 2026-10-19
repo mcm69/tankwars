@@ -42,6 +42,8 @@ export class BattleRenderer {
   /** Set by the scene each frame from the settings. */
   shakeEnabled = true;
   reducedMotion = false;
+  /** Names over the tanks (the Tank names option). */
+  labels = false;
   /** Drawn turret angle per tank, easing toward the sim's angle. */
   private readonly turret = new Map<number, number>();
   private readonly lastY = new Map<number, number>();
@@ -132,6 +134,15 @@ export class BattleRenderer {
     }
 
     const cur = round.current;
+    if (this.labels) {
+      for (const t of round.tanks) {
+        if (!t.alive) continue;
+        // Above the turn marker for the tank whose turn it is.
+        const marker = t.id === cur?.id && round.phase === 'aiming';
+        const y = Math.round(t.y) - (marker ? 36 : 24);
+        drawTextShadow(ctx, t.name, Math.round(t.x), y, PLAYER_COLORS[t.color]!, 1, 'center');
+      }
+    }
     if (cur?.alive && round.phase === 'aiming') {
       // Bobbing marker above the tank whose turn it is.
       const bob = Math.floor(round.tickCount / 15) % 2;

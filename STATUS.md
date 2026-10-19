@@ -1,7 +1,7 @@
 # Status
 
-**Current stage:** Stage 12 — Visual polish & backgrounds (complete, awaiting review)
-**Next:** Stage 13 — Balance, QA & release prep
+**Current stage:** Stage 13 — Balance, QA & release prep (complete, awaiting sign-off)
+**Next:** Sign-off, hosting choice, balance tweaks from playtesting
 **Last updated:** 2026-10-19
 
 See [PLAN.md](PLAN.md) for the full stage list. Update this file at the end of every work session
@@ -21,25 +21,20 @@ and at every stage boundary.
 - [x] 9 — Audio
 - [x] 10 — Touch & responsive layout
 - [x] 11 — Persistence
-- [x] 12 — Visual polish & backgrounds (awaiting review)
-- [ ] 13 — Balance, QA & release prep
+- [x] 12 — Visual polish & backgrounds
+- [x] 13 — Balance, QA & release prep (awaiting sign-off)
 
 ## Current stage progress
 
-Stage 12 is done: the skies move and explosions have more punch.
+Stage 13 is done, apart from sign-off and the choices below. Version 1.0.0.
 
-- **Backgrounds** (`src/render/backgrounds.ts`): None (black), Starry Sky (twinkling stars and the odd shooting star), Color Bars (rising bands in eight hues), Circles (rainbow rings spreading from the center), Spreading (a turning three-armed spiral), Blue Sky (the landscape's sky with drifting pixel clouds) and Random (one of the animated five per game, picked from the game's seed). Bars, Circles and Spreading emulate VGA palette cycling: a half-resolution index buffer goes through a rotating 64-color lookup table, so a frame costs one pass over 50k bytes, and only when the colors shift. The palettes stay dark so shells and tanks stand out.
-- **Background speed** 0–10 (0 = still) now works.
-- **Reduce motion** (Auto/On/Off; Auto follows `prefers-reduced-motion`): stills the background, turns off screen shake and dims the nuke's full-field flash to 20%.
-- **Screen shake** (On/Off): scales with blast radius (max 6 px), plus kicks for tank deaths and hard landings. Only the field shakes (never upward), and the HUD and sky stay put.
-- **Particles** (`src/render/particles.ts`, presentation only, capped at 700): sparks from every explosion, smoke that rises behind the fireball once it fades (blasts of radius 14+), and dust when a tank lands after a fall. There's also a white flash on each explosion's first frames.
-- **Smoother turret**: the drawn barrel eases toward big angle jumps (mouse aim, computer turns) and snaps for small steps, so keyboard aiming stays exact.
-- Performance: every background holds 60 fps with 10 computer tanks at 3× speed under 4× CPU throttling in phone emulation.
-- **Menu split** (after review): the main menu now has only Start, Number of players, Games per set, Wind and Options (plus Resume when a set is saved). Everything else is on a new **Options** screen (`src/scenes/options.ts`, O from the menu), in Game rules, Sound and Display sections, with Restore defaults and Back (Esc). Row definitions are shared in `src/scenes/menu-items.ts`, and `MenuList` supports section headings the cursor skips.
-- **QA fixes** (after review): background speed defaults to 3 (8 was too fast). Tanks darken toward black as they lose health, as in the original (`healthColor`, 5% steps). And the original's **easter egg**: at Men = 100 and power exactly 800, any non-laser shot flies as a trick shell (`Projectile.trick`, `stepTrickShot` in `physics.ts`). It goes dead straight at 7 px/tick (no gravity or wind), always leaves a trace, and bores a 2 px tunnel through the ground. With walls on it bounces off the sides, ceiling and floor until it finds a tank (the shooter included), then goes off as the selected weapon (Russian roulette nuke) and never duds. Without walls it's lost when it leaves the field. Computers nudge 800 to 799 so they never stumble into it.
-- **Dud fix**: a dud now really fails. It bores through the tank (25 damage) and is spent, landing with a harmless puff instead of exploding in the ground behind the tank.
-- Dev params: `?bg=stars&bgspeed=N`. The debug handle has `visuals` (sky, effective speed, motion flags).
-- Tests: 199 unit tests (new: trick shot, health color, MenuList headings, reduced-motion logic, settings sanitizing, Random background resolution, shake decay and direction, particle lifetime and cap) + 25 e2e tests (new: Options screen navigation, every background renders, and reduced motion stills the sky and disables shake, with a settings override).
+- **Performance:** 10 tanks with a 5 Mt nuke, CRI 20/D and CRI 20/ND (crumble 100%, the fastest animated sky) hold 60 fps at 6× CPU throttling in phone emulation. A minute of 10-computer play shows no heap growth, so no fixes were needed.
+- **Error boundary:** any uncaught error stops the loop (`GameLoop` now honors `stop()` mid-frame) and shows a DOM crash panel with the message, **Copy debug info** (falling back to a selectable text box) and Reload. Your settings and the set as of the start of the game are saved, so Resume works.
+- **Debug state and replays:** `Round` keeps a copy of its config and a log of every accepted command (`commandLog`). The debug state (`src/debug/debug-state.ts`: version, settings, set snapshot, round config, log, tick) is copied with **F9** in battle or from the crash panel, and `window.__tankwars.debugState()` returns it. `npm run replay -- report.json [--until TICK]` replays it headlessly (`src/sim/replay.ts`) and rethrows any crash.
+- **Accessibility:** a **Tank names** option (Options → Display) labels each tank with its player's name, so nobody has to rely on color. Together with Reduce motion this covers the plan. Remappable keys stay a stretch goal.
+- **Balance:** the AI tournament ranking still matches the manual (Birdy Bonker 94% in duels, then Windless Wit, Lob & Shoot and Lobber around 47%, Twanger 40%, Rifleman 22%, Mr. Stupid 10%). I couldn't do the side-by-side DOSBox sessions, so the physics, weapon and economy numbers are the first-pass values listed below, to tune from your playtesting.
+- **Release:** a static build (47.6 kB gzipped JS) with relative paths, checked from a subpath on a plain file server. There's a web manifest and our own pixel-tank icon (SVG plus 180/192/512 PNGs), and a hand-written service worker (`public/sw.js`, production only) that makes it playable offline after the first visit, verified by an offline reload. The version shows on the title screen. A README covers playing, development, bug reports and deploying.
+- Tests: 202 unit tests (new: replay reproduces whole AI rounds exactly, stops at a tick, detects divergence) + 28 e2e tests (new: a real in-browser game replays to the identical state in Node; F9 copies the debug state; a crash stops the game and shows the panel).
 
 ## Implementation notes
 
@@ -72,15 +67,11 @@ Stage 12 is done: the skies move and explosions have more punch.
 
 ## Playtest script for current stage
 
-1. The main menu is short now: Start, players, games per set, wind, Options. Open Options (Enter on it, or O): rules, sound and display options in sections; Esc goes back with the cursor on Options.
-2. Try each Background in Options (or `?play&bg=circles`). Color Bars rise, Circles spread outward, Spreading turns, Starry Sky twinkles (wait for a shooting star), and Blue Sky has drifting clouds. Random changes from game to game.
-3. Background speed 0 freezes the sky; 10 is fast.
-4. Fire a nuke or a big missile: white flash, sparks, smoke rising after the fireball, and the field shakes. Blow the ground out from under a tank: dust when it lands.
-5. Turn Screen shake off: no shaking. Set Reduce motion to On (or turn on your OS's reduced-motion setting with Auto): the sky stops, there's no shaking, and the nuke flash is dim.
-6. Swing the turret with a mouse click far from the current angle: the barrel sweeps instead of jumping. Arrow-key aiming still moves exactly one degree.
-
-7. Shoot a tank a few times: it gets darker with each hit, nearly black near death.
-8. Easter egg: at full health set power to exactly 800 and fire with walls on. The shell zigzags straight through everything, slicing tunnels and leaving a trace, until it hits someone (maybe you) and goes off as your weapon. Try it with a nuke.
+1. Play a full set or two (humans and computers). Note anything that feels off against the original: blast sizes, wind strength, damage, prices, income, AI strength.
+2. Turn on Options → Display → Tank names: names float over the tanks.
+3. In battle, press F9: "Debug info copied". Paste it somewhere to see the JSON.
+4. `npm run build && npx vite preview`, open it, then go offline (DevTools → Network → Offline) and reload: it still loads. On a phone, try "Add to Home Screen".
+5. Optional crash test: in the console, `__tankwars.app.currentScene.update = () => { throw new Error('test') }`. The crash panel appears, and Reload offers Resume.
 
 ## Known issues
 

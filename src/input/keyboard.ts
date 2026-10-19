@@ -63,6 +63,12 @@ export class KeyboardController {
       e.target.closest('input, select, textarea')
     )
       return;
+    if (e.code === 'F9') {
+      // Copy debug info (handled by the battle scene); never an answer key.
+      e.preventDefault();
+      if (!e.repeat) this.queue.push({ kind: 'key', code: 'F9' });
+      return;
+    }
     const mapped = mapKey(e.code, e.key, e.shiftKey);
     if (mapped || e.code === 'Tab' || e.code === 'F1') e.preventDefault();
     if (e.repeat) return; // we do our own repeat, tied to sim ticks

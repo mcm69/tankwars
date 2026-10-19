@@ -58,6 +58,12 @@ export interface RoundConfig {
   deathStyle?: DeathStyle;
 }
 
+/** A command as the round accepted it, with the tick it was applied before. */
+export interface LoggedCommand {
+  tick: number;
+  cmd: Command;
+}
+
 export type Phase =
   'dropping' | 'aiming' | 'flying' | 'effects' | 'crumbling' | 'settling' | 'roundOver';
 
@@ -145,8 +151,13 @@ export class Round implements World {
   private readonly dudOverride: number | undefined;
   private readonly deathStyleOverride: DeathStyle | undefined;
 
+  /** The config this round started from (a copy), and every accepted command: a replay. */
+  readonly config: RoundConfig;
+  readonly commandLog: LoggedCommand[] = [];
+
   constructor(config: RoundConfig) {
     if (config.players.length < 2) throw new RangeError('A round needs at least 2 players');
+    this.config = structuredClone(config);
     this.rng = new Rng(config.seed);
     const gen = generateTerrain(
       this.rng,
@@ -210,6 +221,12 @@ export class Round implements World {
 
   /** Applies a player command for the current tank. Returns false if it isn't allowed now. */
   command(cmd: Command): boolean {
+    const ok = this.apply(cmd);
+    if (ok) this.commandLog.push({ tick: this.tickCount, cmd: { ...cmd } });
+    return ok;
+  }
+
+  private apply(cmd: Command): boolean {
     if (cmd.type === 'massKill') {
       if (this.phase === 'roundOver' || this.massKillPending) return false;
       this.massKillPending = true;

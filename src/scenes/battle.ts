@@ -1,5 +1,6 @@
 import { planTurn, type AiMemory, type AiPlan } from '../ai/registry';
 import type { App } from '../app';
+import { copyDebugState } from '../debug/debug-state';
 import { LAYOUT, LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../config';
 import { Rng } from '../core/rng';
 import type { GameSet } from '../game/set';
@@ -131,6 +132,7 @@ export class BattleScene implements Scene {
     const settings = this.app.settings;
     this.renderer.reducedMotion = motionReduced(settings);
     this.renderer.shakeEnabled = settings.screenShake;
+    this.renderer.labels = settings.tankLabels;
     if (!this.renderer.shakeEnabled || this.renderer.reducedMotion) this.renderer.shake.reset();
     this.backgroundSpeed = effectiveBackgroundSpeed(settings);
   }
@@ -147,6 +149,13 @@ export class BattleScene implements Scene {
     // to pause, which would reopen it), but keep later presses from the same tick.
     let skipRestOfPress = false;
     for (const e of events) {
+      if (e.kind === 'key' && e.code === 'F9') {
+        // Bug reports: the debug state replays this round (see `npm run replay`).
+        void copyDebugState(this.app).then((ok) =>
+          this.toast(ok ? 'Debug info copied' : 'Clipboard unavailable', '#3fe6e6'),
+        );
+        continue;
+      }
       if (e.kind === 'key') skipRestOfPress = false;
       else if (skipRestOfPress) continue;
       if (this.overlay) {

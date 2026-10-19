@@ -36,6 +36,7 @@ export class OptionsScene implements Scene {
       o.backgroundSpeed,
       o.motion,
       o.screenShake,
+      o.tankLabels,
       {
         id: 'defaults',
         label: 'Restore defaults',
@@ -47,7 +48,7 @@ export class OptionsScene implements Scene {
       },
       { id: 'back', label: 'Back', activate: () => this.back(), help: 'Return to the main menu.' },
     ];
-    this.list = new MenuList(items, 140, 52, 360, 17);
+    this.list = new MenuList(items, 140, 48, 360, 16);
   }
 
   private back(): void {

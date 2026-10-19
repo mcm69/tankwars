@@ -41,6 +41,7 @@ export class GameLoop {
   private readonly stepper: FixedStepper;
   private rafId = 0;
   private last = 0;
+  private running = false;
 
   constructor(
     tickRate: number,
@@ -50,20 +51,23 @@ export class GameLoop {
   }
 
   start(): void {
-    if (this.rafId) return;
+    if (this.running) return;
+    this.running = true;
     this.stepper.reset();
     this.last = performance.now();
     const frame = (now: number) => {
       const { ticks, alpha } = this.stepper.advance(now - this.last);
       this.last = now;
-      for (let i = 0; i < ticks; i++) this.handlers.update();
-      this.handlers.render(alpha);
-      this.rafId = requestAnimationFrame(frame);
+      // A handler may stop the loop (e.g. the error boundary); honor it mid-frame.
+      for (let i = 0; i < ticks && this.running; i++) this.handlers.update();
+      if (this.running) this.handlers.render(alpha);
+      if (this.running) this.rafId = requestAnimationFrame(frame);
     };
     this.rafId = requestAnimationFrame(frame);
   }
 
   stop(): void {
+    this.running = false;
     cancelAnimationFrame(this.rafId);
     this.rafId = 0;
   }

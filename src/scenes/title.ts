@@ -181,6 +181,7 @@ export class TitleScene implements Scene {
     if (Math.floor(this.ticks / 30) % 2 === 0) {
       drawTextShadow(ctx, 'Press any key', cx, 150, '#ffffff', 2, 'center');
     }
+    drawTextShadow(ctx, `v${__APP_VERSION__}`, LOGICAL_WIDTH - 6, 6, '#fff0d0', 1, 'right');
   }
 
   dispose(): void {

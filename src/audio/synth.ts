@@ -69,7 +69,8 @@ export class Synth implements SoundOut {
       const data = this.noiseBuffer.getChannelData(0);
       for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
     }
-    if (this.ctx.state === 'suspended') void this.ctx.resume();
+    // Resuming can be refused (no gesture yet); a later gesture tries again.
+    if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
   }
 
   private get ready(): boolean {

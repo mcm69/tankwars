@@ -1,5 +1,7 @@
 import './style.css';
 import { AI_IDS, type AiId } from './ai/registry';
+import { buildDebugState, type DebugState } from './debug/debug-state';
+import { showErrorPanel } from './debug/error-panel';
 import { App } from './app';
 import { TICK_RATE } from './config';
 import { GameLoop } from './core/loop';
@@ -23,6 +25,8 @@ declare global {
       readonly overlay: string | null;
       readonly app: App | undefined;
       readonly visuals: BattleScene['visuals'] | null;
+      /** Everything needed to replay the current round (see `npm run replay`). */
+      debugState(): DebugState;
       readonly touchLayout: Record<string, { x: number; y: number; w: number; h: number }> | null;
     };
   }
@@ -120,36 +124,75 @@ window.__tankwars = {
   get touchLayout() {
     return battle()?.touchLayout ?? null;
   },
+  debugState() {
+    return buildDebugState(app);
+  },
 };
+
+// Offline play in production builds (dev builds would cache stale modules).
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+      // No offline support (e.g. file:// or a private window); the game works regardless.
+    });
+  });
+}
 
 // iOS pinch-zoom gestures aren't covered by touch-action.
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 // Portrait on a touch device shows a "rotate" prompt (CSS); the game holds still meanwhile.
 const portrait = matchMedia('(orientation: portrait) and (pointer: coarse)');
 
-new GameLoop(TICK_RATE, {
+// Error boundary: any uncaught error stops the game and shows a panel with debug info.
+const loop = new GameLoop(TICK_RATE, {
   update() {
     if (portrait.matches) return;
+    guard(update);
     ticks++;
-    update();
   },
   render(alpha) {
-    // Scenes draw in core (640×400) coordinates; the touch layout adds side panels around it.
-    const { ctx } = screen;
-    if (screen.coreOffsetX > 0) {
-      ctx.fillStyle = '#05030a';
-      ctx.fillRect(0, 0, screen.width, screen.height);
-    }
-    ctx.save();
-    ctx.translate(screen.coreOffsetX, 0);
-    render(alpha);
-    ctx.restore();
-    app?.renderSides(ctx);
-    debug.set('scene', window.__tankwars!.scene);
-    debug.set('ticks', ticks);
-    debug.frame();
+    guard(() => renderFrame(alpha));
   },
-}).start();
+});
+
+function guard(fn: () => void): void {
+  try {
+    fn();
+  } catch (e) {
+    crash(e);
+  }
+}
+
+function crash(e: unknown): void {
+  loop.stop();
+  try {
+    app?.audio.stopAll();
+  } catch {
+    // Already crashing; sound can stay as it is.
+  }
+  showErrorPanel(e, app);
+}
+
+window.addEventListener('error', (e) => crash(e.error ?? e.message));
+window.addEventListener('unhandledrejection', (e) => crash(e.reason));
+loop.start();
+
+function renderFrame(alpha: number): void {
+  // Scenes draw in core (640×400) coordinates; the touch layout adds side panels around it.
+  const { ctx } = screen;
+  if (screen.coreOffsetX > 0) {
+    ctx.fillStyle = '#05030a';
+    ctx.fillRect(0, 0, screen.width, screen.height);
+  }
+  ctx.save();
+  ctx.translate(screen.coreOffsetX, 0);
+  render(alpha);
+  ctx.restore();
+  app?.renderSides(ctx);
+  debug.set('scene', window.__tankwars!.scene);
+  debug.set('ticks', ticks);
+  debug.frame();
+}
 
 /** ?arsenal: plenty of every weapon, laser energy, guidance and shields for trying them out. */
 function devArsenal(): number[] {

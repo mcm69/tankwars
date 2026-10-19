@@ -151,6 +151,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     'explosionsKill',
     'computersBuy',
     'screenShake',
+    'tankLabels',
   ] as const) {
     if (isBool(raw[key])) s[key] = raw[key];
   }

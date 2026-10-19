@@ -37,7 +37,8 @@ export type OptionId =
   | 'background'
   | 'backgroundSpeed'
   | 'motion'
-  | 'screenShake';
+  | 'screenShake'
+  | 'tankLabels';
 
 /** Every setting as a menu row, shared by the main menu and the Options screen. */
 export function optionItems(app: App): Record<OptionId, MenuItem> {
@@ -168,6 +169,13 @@ export function optionItems(app: App): Record<OptionId, MenuItem> {
       value: () => onOff(s().screenShake),
       change: toggle('screenShake'),
       help: 'Big explosions rattle the battlefield.',
+    },
+    tankLabels: {
+      id: 'tankLabels',
+      label: 'Tank names',
+      value: () => onOff(s().tankLabels),
+      change: toggle('tankLabels'),
+      help: "Shows each player's name over their tank (handy for color blindness).",
     },
   };
 }
