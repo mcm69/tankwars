@@ -29,7 +29,6 @@ import {
   DUD_DAMAGE,
   dudChance,
   fireLaser,
-  fireTrickShot,
   isTrickShot,
   LASER_MIN_ENERGY,
 } from './weapons';
@@ -291,26 +290,10 @@ export class Round implements World {
     t.inventory[weapon] = Math.max(0, t.inventory[weapon]! - 1);
     this.reselectIfEmpty(t);
 
-    if (isTrickShot(t, weapon)) {
-      t.guidance = null;
-      this.events.push({ type: 'fire', tankId: t.id, weapon });
-      const { points } = fireTrickShot(this, t);
-      this.shotLog.push({
-        tankId: t.id,
-        angle: t.angle,
-        power: t.power,
-        weapon,
-        impact: points[points.length - 1] ?? null,
-      });
-      this.effects.beam(points, t.color);
-      this.events.push({ type: 'laser', tankId: t.id });
-      this.phase = 'effects';
-      return true;
-    }
-
-    this.projectile = launch(t, weapon);
+    const trick = isTrickShot(t, weapon);
+    this.projectile = launch(t, weapon, trick);
     this.shotLog.push({ tankId: t.id, angle: t.angle, power: t.power, weapon, impact: null });
-    const g = t.guidance;
+    const g = trick ? null : t.guidance; // a trick shot needs no guidance
     const target = g ? this.tanks[g.targetId] : undefined;
     if (g && target?.alive) {
       // One guidance unit per guided shot, aimed at where the target is now.
@@ -363,7 +346,7 @@ export class Round implements World {
     if (!p) return;
     const r = stepProjectile(p, this);
     if (r.kind === 'flying') return;
-    if (r.kind === 'hitTank' && canDud(behaviorOf(p.weapon))) {
+    if (r.kind === 'hitTank' && !p.trick && canDud(behaviorOf(p.weapon))) {
       const chance = this.dudOverride ?? dudChance(Math.hypot(p.vx, p.vy));
       if (this.rng.chance(chance)) {
         // Fails to detonate: bores through the tank and keeps flying.

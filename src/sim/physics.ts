@@ -18,7 +18,13 @@ export interface Projectile {
   age: number;
   /** Guidance toward a target point, and which axis has locked on (if any). */
   guidance?: Guidance;
+  /** The 800-power trick shot (see `TRICK_SHOT_POWER`): straight, tunneling, bouncing. */
+  trick?: boolean;
 }
+
+/** Trick shot speed (px/tick) and the radius of the tunnel it bores. */
+export const TRICK_SHOT_SPEED = 7;
+const TRICK_TUNNEL_RADIUS = 2;
 
 /**
  * Herb's (H) system locks the shell onto the target's column when it passes over it, so it
@@ -49,9 +55,9 @@ export interface PhysicsWorld {
   walls: boolean;
 }
 
-export function launch(tank: Tank, weapon = tank.selected): Projectile {
+export function launch(tank: Tank, weapon = tank.selected, trick = false): Projectile {
   const a = (tank.angle * Math.PI) / 180;
-  const speed = tank.power * POWER_TO_SPEED;
+  const speed = trick ? TRICK_SHOT_SPEED : tank.power * POWER_TO_SPEED;
   const tip = barrelTip(tank);
   return {
     x: tip.x,
@@ -64,6 +70,7 @@ export function launch(tank: Tank, weapon = tank.selected): Projectile {
     weapon,
     passed: [],
     age: 0,
+    ...(trick ? { trick: true } : {}),
   };
 }
 
@@ -76,6 +83,7 @@ export function launch(tank: Tank, weapon = tank.selected): Projectile {
  * moving away, with no wind to bring it back.
  */
 export function stepProjectile(p: Projectile, world: PhysicsWorld): StepResult {
+  if (p.trick) return stepTrickShot(p, world);
   const { terrain, tanks, wind, walls } = world;
   const w = terrain.width;
   const windAccel = wind * WIND_ACCEL;
@@ -129,6 +137,41 @@ export function stepProjectile(p: Projectile, world: PhysicsWorld): StepResult {
     if (goneLeft || goneRight || p.x < -2 * w || p.x > 3 * w) return { kind: 'lost' };
   }
   return { kind: 'flying' };
+}
+
+/** The trick shot: constant velocity, carving a tunnel, bouncing off all four sides. */
+function stepTrickShot(p: Projectile, world: PhysicsWorld): StepResult {
+  const { terrain, tanks, walls } = world;
+  const w = terrain.width;
+  const h = terrain.height;
+  p.prevX = p.x;
+  p.prevY = p.y;
+  p.age++;
+  const steps = Math.max(1, Math.ceil(Math.hypot(p.vx, p.vy)));
+  for (let i = 0; i < steps; i++) {
+    p.x += p.vx / steps;
+    p.y += p.vy / steps;
+    const outX = p.x < 0 || p.x >= w;
+    const outY = p.y < 0 || p.y >= h;
+    if (outX || outY) {
+      if (!walls) return { kind: 'lost' };
+      if (outX) {
+        p.x = p.x < 0 ? -p.x : 2 * (w - 1e-6) - p.x;
+        p.vx = -p.vx;
+      }
+      if (outY) {
+        p.y = p.y < 0 ? -p.y : 2 * (h - 1e-6) - p.y;
+        p.vy = -p.vy;
+      }
+    }
+    for (const t of tanks) {
+      // A few ticks' grace so it doesn't hit its own tank on the way out.
+      if (t.id === p.ownerId && p.age < 4) continue;
+      if (hitsTank(t, p.x, p.y)) return { kind: 'hitTank', x: p.x, y: p.y, tankId: t.id };
+    }
+    if (terrain.isSolid(p.x, p.y)) terrain.carveCircle(p.x, p.y, TRICK_TUNNEL_RADIUS);
+  }
+  return p.age > MAX_FLIGHT_TICKS ? { kind: 'lost' } : { kind: 'flying' };
 }
 
 /** Checks whether the shell just crossed its guidance line, and locks on if so. */

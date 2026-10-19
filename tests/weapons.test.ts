@@ -11,7 +11,6 @@ import {
   detonate,
   dudChance,
   fireLaser,
-  fireTrickShot,
   isTrickShot,
   LASER_MIN_ENERGY,
   TRICK_SHOT_POWER,
@@ -288,52 +287,75 @@ describe('trick shot (Men = 100, power 800)', () => {
     expect(isTrickShot(t, 0)).toBe(false);
   });
 
-  it('passes through the ground untouched and bounces until it finds a tank', () => {
-    const terrain = flat(200);
-    const shooter = createTank(0, 'a', 0, 100, 200);
-    const target = createTank(1, 'b', 1, 450, 200);
-    shooter.angle = 63;
-    const w = { ...world(terrain, [shooter, target]), walls: true };
-    const before = solidCount(terrain);
-    const { points, hitId } = fireTrickShot(w, shooter);
-    expect(hitId).not.toBeNull();
-    expect(points.length).toBeGreaterThan(3); // bounced at least twice
-    expect(solidCount(terrain)).toBe(before);
-    expect(w.events).toContainEqual(expect.objectContaining({ type: 'tankHit', damage: 100 }));
-  });
-
-  it('can find the shooter itself', () => {
-    const shooter = createTank(0, 'a', 0, 312, 200);
-    shooter.angle = 90; // straight up, off the ceiling, straight back down
-    const w = { ...world(flat(200), [shooter]), walls: true };
-    expect(fireTrickShot(w, shooter).hitId).toBe(0);
-    expect(shooter.health).toBe(0);
-  });
-
-  it('leaves the field without walls', () => {
-    const shooter = createTank(0, 'a', 0, 100, 200);
-    const target = createTank(1, 'b', 1, 450, 200);
-    shooter.angle = 60;
-    const { hitId } = fireTrickShot(world(flat(200), [shooter, target]), shooter);
-    expect(hitId).toBeNull();
-    expect(target.health).toBe(100);
-  });
-
-  it('replaces the normal shot in a round and uses up the weapon', () => {
+  /** A round on flat ground, at the trick shot setting, with the given walls. */
+  function trickRound(walls: 'on' | 'off', inventory?: number[]) {
     const round = new Round({
       seed: 2,
       players: [
-        { name: 'a', color: 0 },
-        { name: 'b', color: 1 },
+        { name: 'a', color: 0, ...(inventory ? { inventory } : {}) },
+        { name: 'b', color: 1, ...(inventory ? { inventory } : {}) },
       ],
       wind: 0,
+      options: { ...DEFAULT_OPTIONS, walls, crumble: 0 },
     });
     while (round.phase !== 'aiming') round.tick();
     round.command({ type: 'setPower', power: TRICK_SHOT_POWER });
+    return round;
+  }
+
+  function flyOut(round: Round): RoundEvent[] {
+    const events: RoundEvent[] = [];
+    for (let i = 0; i < 4000 && round.projectile; i++) {
+      round.tick();
+      events.push(...round.drainEvents());
+    }
+    return events;
+  }
+
+  it('flies dead straight as a shell, boring a tunnel through the ground', () => {
+    const round = trickRound('on');
+    const t = round.current!;
+    round.command({ type: 'setAim', angle: 70 });
+    const before = solidCount(round.terrain);
     expect(round.command({ type: 'fire' })).toBe(true);
+    const p = round.projectile!;
+    expect(p.trick).toBe(true);
+    const speed = Math.hypot(p.vx, p.vy);
+    for (let i = 0; i < 30 && round.projectile; i++) round.tick();
+    expect(Math.hypot(p.vx, p.vy)).toBeCloseTo(speed); // no gravity, no wind
+    flyOut(round);
+    expect(solidCount(round.terrain)).toBeLessThan(before);
     expect(round.projectile).toBeNull();
+    // It found a tank (with walls on it can't escape) and went off as the selected weapon.
     expect(round.phase).toBe('effects');
-    expect(round.effects.beams).toHaveLength(1);
+    expect(t.alive).toBe(true);
+  });
+
+  it('goes off as whatever weapon is selected (Russian roulette nuke)', () => {
+    const inv = fullInventory();
+    const round = trickRound('on', inv);
+    round.command({ type: 'selectWeapon', index: itemIndex('nuke20kt') });
+    round.command({ type: 'setAim', angle: 90 }); // straight up: off the ceiling, back home
+    round.command({ type: 'fire' });
+    const events = flyOut(round);
+    const boom = events.find((e) => e.type === 'explode');
+    expect(boom).toMatchObject({ radius: 62 });
+  });
+
+  it('is lost when it leaves the field without walls', () => {
+    const round = trickRound('off');
+    round.command({ type: 'setAim', angle: 60 });
+    round.command({ type: 'fire' });
+    const events = flyOut(round);
+    expect(events.some((e) => e.type === 'explode')).toBe(false);
+  });
+
+  it('never applies below full health', () => {
+    const round = trickRound('on');
+    round.current!.health = 99;
+    round.command({ type: 'setPower', power: TRICK_SHOT_POWER });
+    round.command({ type: 'fire' });
+    expect(round.projectile?.trick).toBeUndefined();
   });
 });
 

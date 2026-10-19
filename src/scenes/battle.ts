@@ -197,7 +197,8 @@ export class BattleScene implements Scene {
     this.renderer.tick(this.round);
 
     const p = this.round.projectile;
-    if (p && this.set.settings.shotTrail) {
+    // The trick shot always leaves its trace.
+    if (p && (this.set.settings.shotTrail || p.trick)) {
       const owner = this.round.tanks[p.ownerId]!;
       this.trails.segment(p.prevX, p.prevY, p.x, p.y, darken(PLAYER_COLORS[owner.color]!, 0.35));
     }
